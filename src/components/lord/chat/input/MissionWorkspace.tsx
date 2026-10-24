@@ -20,7 +20,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Json } from "@/integrations/supabase/types";
-import { missionProgress, type MissionAction, type MissionPlan, type MissionStatus } from "@/lib/autopilot/mission-engine";
+import {
+  missionProgress,
+  type MissionAction,
+  type MissionPlan,
+  type MissionStatus,
+} from "@/lib/autopilot/mission-engine";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +74,14 @@ function statusLabel(status: MissionStatus): string {
 }
 
 function isActive(status: MissionStatus): boolean {
-  return ["planning", "planned", "running", "paused", "needs_approval", "needs_clarification"].includes(status);
+  return [
+    "planning",
+    "planned",
+    "running",
+    "paused",
+    "needs_approval",
+    "needs_clarification",
+  ].includes(status);
 }
 
 export function MissionWorkspace({ isPro }: { isPro: boolean }) {
@@ -91,14 +103,17 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
     window.localStorage.setItem("lord-autopilot-selected-mission", next.id);
   }, []);
 
-  const refreshMission = useCallback(async (id: string) => {
-    const response = await missionRequest<{ mission: MissionView; availableActions: MissionAction[] }>(
-      null,
-      id,
-    );
-    acceptMission(response.mission);
-    setAvailableActions(response.availableActions);
-  }, [acceptMission]);
+  const refreshMission = useCallback(
+    async (id: string) => {
+      const response = await missionRequest<{
+        mission: MissionView;
+        availableActions: MissionAction[];
+      }>(null, id);
+      acceptMission(response.mission);
+      setAvailableActions(response.availableActions);
+    },
+    [acceptMission],
+  );
 
   useEffect(() => {
     if (!open || !isPro) return;
@@ -111,7 +126,8 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
         setMissions(response.missions);
         setAvailableActions(response.availableActions);
         const savedId = window.localStorage.getItem("lord-autopilot-selected-mission");
-        const selected = response.missions.find((item) => item.id === savedId) ?? response.missions[0];
+        const selected =
+          response.missions.find((item) => item.id === savedId) ?? response.missions[0];
         setMission(selected ?? null);
         setLoading(false);
       })
@@ -129,11 +145,7 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
   const activeMissionStatus = mission?.status;
 
   useEffect(() => {
-    if (
-      !open ||
-      !activeMissionId ||
-      (activeMissionStatus !== "running" && !executionPending)
-    ) {
+    if (!open || !activeMissionId || (activeMissionStatus !== "running" && !executionPending)) {
       return;
     }
     const timer = window.setInterval(() => {
@@ -238,7 +250,9 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
     <>
       <button
         type="button"
-        aria-label={isPro ? "Open LORD Autopilot mission workspace" : "LORD Autopilot requires LORD Pro"}
+        aria-label={
+          isPro ? "Open LORD Autopilot mission workspace" : "LORD Autopilot requires LORD Pro"
+        }
         title={isPro ? "Mission Mode" : "Mission Mode · LORD Pro"}
         onClick={() => {
           if (!isPro) {
@@ -273,14 +287,17 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
               LORD Autopilot
             </DialogTitle>
             <DialogDescription className="relative text-xs text-white/55">
-              Plan and run bounded tasks with LORD&apos;s configured tools. External actions require approval.
+              Plan and run bounded tasks with LORD&apos;s configured tools. External actions require
+              approval.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[15rem_minmax(0,1fr)]">
             <aside className="hidden min-h-0 flex-col border-r border-white/10 bg-white/[0.02] lg:flex">
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                <span className="text-xs font-medium uppercase tracking-wider text-white/55">Missions</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-white/55">
+                  Missions
+                </span>
                 <button
                   type="button"
                   onClick={() => {
@@ -317,7 +334,9 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                   </button>
                 ))}
                 {!missions.length && !loading && (
-                  <p className="px-3 py-5 text-center text-xs text-white/40">No saved missions yet.</p>
+                  <p className="px-3 py-5 text-center text-xs text-white/40">
+                    No saved missions yet.
+                  </p>
                 )}
               </div>
               <p className="border-t border-white/10 px-3 py-3 text-[10px] leading-relaxed text-white/35">
@@ -338,7 +357,9 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                           {statusLabel(mission.status)}
                         </span>
                       </div>
-                      <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/55">{mission.objective}</p>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/55">
+                        {mission.objective}
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -363,7 +384,9 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                         transition={{ duration: 0.35 }}
                       />
                     </div>
-                    <p className="mt-3 text-xs leading-relaxed text-white/55">{mission.plan.summary}</p>
+                    <p className="mt-3 text-xs leading-relaxed text-white/55">
+                      {mission.plan.summary}
+                    </p>
                   </section>
 
                   {mission.status === "needs_clarification" && (
@@ -374,7 +397,10 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                           <li key={`${index}-${question}`}>{question}</li>
                         ))}
                       </ul>
-                      <label className="mt-3 block text-xs text-white/55" htmlFor="mission-clarifications">
+                      <label
+                        className="mt-3 block text-xs text-white/55"
+                        htmlFor="mission-clarifications"
+                      >
                         Your answer
                       </label>
                       <textarea
@@ -402,7 +428,8 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                       <div>
                         <h3 className="text-sm font-medium text-amber-100">Approval required</h3>
                         <p className="mt-1 text-xs text-white/55">
-                          This plan creates a game in your library. Review the steps before approving.
+                          This plan creates a game in your library. Review the steps before
+                          approving.
                         </p>
                       </div>
                       <button
@@ -417,9 +444,14 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                   )}
 
                   <section className="space-y-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-white/45">Plan and dependencies</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-white/45">
+                      Plan and dependencies
+                    </h3>
                     {mission.plan.steps.map((step, index) => (
-                      <article key={step.id} className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                      <article
+                        key={step.id}
+                        className="rounded-xl border border-white/10 bg-white/[0.025] p-4"
+                      >
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 text-cyan-200">
                             {step.status === "completed" ? (
@@ -444,14 +476,18 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                                 </span>
                               )}
                             </div>
-                            <p className="mt-1 text-xs text-white/45">Expected: {step.expectedResult}</p>
+                            <p className="mt-1 text-xs text-white/45">
+                              Expected: {step.expectedResult}
+                            </p>
                             {step.dependencies.length > 0 && (
                               <p className="mt-2 text-[10px] text-white/35">
                                 Depends on: {step.dependencies.join(", ")}
                               </p>
                             )}
                             {step.result?.toolName && (
-                              <p className="mt-2 text-[10px] text-cyan-100/65">Tool: {step.result.toolName}</p>
+                              <p className="mt-2 text-[10px] text-cyan-100/65">
+                                Tool: {step.result.toolName}
+                              </p>
                             )}
                             {step.result?.content && (
                               <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-white/10 bg-black/20 p-3 font-sans text-xs leading-relaxed text-white/75">
@@ -463,30 +499,45 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                                 {step.result.error}
                               </p>
                             )}
-                            {step.result?.data &&
-                              typeof step.result.data === "object" &&
-                              "gameId" in step.result.data &&
-                              typeof step.result.data.gameId === "string" && (
+                            {(() => {
+                              const resultData = step.result?.data;
+                              const gameId =
+                                resultData &&
+                                typeof resultData === "object" &&
+                                "gameId" in resultData &&
+                                typeof resultData.gameId === "string"
+                                  ? resultData.gameId
+                                  : null;
+
+                              return gameId ? (
                                 <a
-                                  href={`/create-apka-jalwa?gameId=${encodeURIComponent(step.result.data.gameId)}`}
+                                  href={`/create-apka-jalwa?gameId=${encodeURIComponent(gameId)}`}
                                   className="mt-2 inline-flex items-center gap-1 text-xs text-cyan-200 underline underline-offset-2"
                                 >
                                   Open generated game
                                 </a>
-                              )}
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       </article>
                     ))}
                     {!mission.plan.steps.length && mission.status !== "planning" && (
-                      <p className="rounded-lg border border-white/10 p-4 text-xs text-white/50">No executable steps are in this plan.</p>
+                      <p className="rounded-lg border border-white/10 p-4 text-xs text-white/50">
+                        No executable steps are in this plan.
+                      </p>
                     )}
                   </section>
 
                   {resultsVisible && mission.result && (
-                    <section aria-live="polite" className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
+                    <section
+                      aria-live="polite"
+                      className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4"
+                    >
                       <h3 className="text-sm font-medium text-cyan-100">Mission results</h3>
-                      <p className="mt-2 text-xs leading-relaxed text-white/70">{mission.plan.summary}</p>
+                      <p className="mt-2 text-xs leading-relaxed text-white/70">
+                        {mission.plan.summary}
+                      </p>
                       <p className="mt-2 text-[10px] text-white/40">
                         {mission.plan.steps.filter((step) => step.status === "completed").length} of{" "}
                         {mission.plan.steps.length} steps validated as complete.
@@ -495,7 +546,10 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                   )}
 
                   {notice && (
-                    <p role="alert" className="rounded-lg border border-red-300/20 bg-red-300/[0.05] p-3 text-xs text-red-100/85">
+                    <p
+                      role="alert"
+                      className="rounded-lg border border-red-300/20 bg-red-300/[0.05] p-3 text-xs text-red-100/85"
+                    >
                       {notice}
                     </p>
                   )}
@@ -508,7 +562,11 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                         onClick={() => void startMission()}
                         className="inline-flex items-center gap-2 rounded-lg bg-cyan-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50"
                       >
-                        {executionPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                        {executionPending ? (
+                          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Play className="h-3.5 w-3.5" />
+                        )}
                         {mayRecoverRunning ? "Resume interrupted mission" : "Start / continue"}
                       </button>
                     )}
@@ -542,15 +600,17 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                         <RotateCcw className="h-3.5 w-3.5" /> Retry step
                       </button>
                     )}
-                    {(mission.status === "completed" || mission.status === "failed") && mission.result && (
-                      <button
-                        type="button"
-                        onClick={() => setResultsVisible((visible) => !visible)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2 text-xs text-white/80 hover:bg-white/[0.06]"
-                      >
-                        <Eye className="h-3.5 w-3.5" /> {resultsVisible ? "Hide results" : "View results"}
-                      </button>
-                    )}
+                    {(mission.status === "completed" || mission.status === "failed") &&
+                      mission.result && (
+                        <button
+                          type="button"
+                          onClick={() => setResultsVisible((visible) => !visible)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2 text-xs text-white/80 hover:bg-white/[0.06]"
+                        >
+                          <Eye className="h-3.5 w-3.5" />{" "}
+                          {resultsVisible ? "Hide results" : "View results"}
+                        </button>
+                      )}
                     {isActive(mission.status) && mission.status !== "planning" && (
                       <button
                         type="button"
@@ -582,7 +642,8 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                     />
                     <h2 className="text-lg font-semibold">What should LORD accomplish?</h2>
                     <p className="mt-1 text-xs text-white/50">
-                      LORD will propose a bounded plan. Tools only run after you start, and consequential actions require approval.
+                      LORD will propose a bounded plan. Tools only run after you start, and
+                      consequential actions require approval.
                     </p>
                   </div>
                   <textarea
@@ -595,11 +656,18 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                     className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm text-white outline-none placeholder:text-white/30 focus-visible:ring-2 focus-visible:ring-cyan-400"
                   />
                   <div className="mt-2 flex items-center justify-between text-[10px] text-white/35">
-                    <span>{availableActions.length ? `Available: ${availableActions.join(" · ")}` : "No configured tools are available."}</span>
+                    <span>
+                      {availableActions.length
+                        ? `Available: ${availableActions.join(" · ")}`
+                        : "No configured tools are available."}
+                    </span>
                     <span>{objective.length}/2000</span>
                   </div>
                   {notice && (
-                    <p role="alert" className="mt-3 rounded-lg border border-red-300/20 bg-red-300/[0.05] p-3 text-xs text-red-100/85">
+                    <p
+                      role="alert"
+                      className="mt-3 rounded-lg border border-red-300/20 bg-red-300/[0.05] p-3 text-xs text-red-100/85"
+                    >
                       {notice}
                     </p>
                   )}
@@ -609,10 +677,18 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                     onClick={() => void createPlan()}
                     className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-300 px-5 py-3 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {loading ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
                     {loading ? "Planning mission…" : "Plan mission"}
                   </button>
-                  {loading && <p role="status" className="mt-3 text-center text-xs text-white/45">Validating available tools and dependencies…</p>}
+                  {loading && (
+                    <p role="status" className="mt-3 text-center text-xs text-white/45">
+                      Validating available tools and dependencies…
+                    </p>
+                  )}
                 </div>
               )}
             </main>

@@ -24,37 +24,39 @@ const MissionPlanSchema = z
     title: z.string().min(1).max(120),
     summary: z.string().min(1).max(500),
     questions: z.array(z.string().min(1).max(300)).max(3),
-    steps: z.array(
-      z
-        .object({
-          id: z.string(),
-          action: MissionActionSchema,
-          arguments: z.record(z.string(), z.unknown()),
-          description: z.string(),
-          expectedResult: z.string(),
-          dependencies: z.array(z.string()),
-          timeoutMs: z.number().int(),
-          retryPolicy: z.object({
-            maxRetries: z.number().int(),
-            recoverableOnly: z.literal(true),
-          }),
-          requiresApproval: z.boolean(),
-          status: z.enum(["pending", "running", "retrying", "completed", "failed", "skipped"]),
-          attempts: z.number().int(),
-          result: z
-            .object({
-              content: z.string().max(20_000).optional(),
-              modelId: z.string().max(100).optional(),
-              provider: z.string().max(100).optional(),
-              toolName: z.string().max(100).optional(),
-              data: z.unknown().optional(),
-              error: z.string().max(1_000).optional(),
-            })
-            .strict()
-            .optional(),
-        })
-        .strict(),
-    ).max(8),
+    steps: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            action: MissionActionSchema,
+            arguments: z.record(z.string(), z.unknown()),
+            description: z.string(),
+            expectedResult: z.string(),
+            dependencies: z.array(z.string()),
+            timeoutMs: z.number().int(),
+            retryPolicy: z.object({
+              maxRetries: z.number().int(),
+              recoverableOnly: z.literal(true),
+            }),
+            requiresApproval: z.boolean(),
+            status: z.enum(["pending", "running", "retrying", "completed", "failed", "skipped"]),
+            attempts: z.number().int(),
+            result: z
+              .object({
+                content: z.string().max(20_000).optional(),
+                modelId: z.string().max(100).optional(),
+                provider: z.string().max(100).optional(),
+                toolName: z.string().max(100).optional(),
+                data: z.unknown().optional(),
+                error: z.string().max(1_000).optional(),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict(),
+      )
+      .max(8),
   })
   .strict();
 
@@ -123,13 +125,11 @@ function toMissionRecord(row: MissionRow): MissionRecord {
     throw new MissionPersistenceError("Saved mission metadata is invalid.");
   }
   const plan = MissionPlanSchema.parse(row.plan);
-  if (
-    !(
-      (row.status === "planning" || row.status === "failed") &&
-      plan.steps.length === 0 &&
-      plan.questions.length === 0
-    )
-  ) {
+  if (!(
+    (row.status === "planning" || row.status === "failed") &&
+    plan.steps.length === 0 &&
+    plan.questions.length === 0
+  )) {
     validateMissionPlan(plan, ALL_MISSION_ACTIONS, true);
   }
   return {

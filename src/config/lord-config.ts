@@ -553,7 +553,8 @@ const MODEL_REGISTRY_DEFINITIONS: readonly ModelDefinition[] = Object.freeze([
     provider: "openrouter",
     type: "chat",
     label: "Gemma 3 27B IT",
-    description: "Google Gemma 3 27B via OpenRouter; provider usage is billed to the server account.",
+    description:
+      "Google Gemma 3 27B via OpenRouter; provider usage is billed to the server account.",
     enabled: true,
     supports: ["chat"],
     capabilities: { ...STANDARD_CHAT_CAPABILITIES },

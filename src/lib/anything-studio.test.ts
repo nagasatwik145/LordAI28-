@@ -60,9 +60,9 @@ describe("Anything Studio artifacts", () => {
     expect(prompt).toContain('"name": "Garden Notes"');
     expect(prompt).toContain("export function plant()");
     expect(prompt).toContain("Do not include credentials");
-    expect(
-      buildDeliverablePrompt("website", "Make a site", validSpec, []),
-    ).toContain("do not load scripts");
+    expect(buildDeliverablePrompt("website", "Make a site", validSpec, [])).toContain(
+      "do not load scripts",
+    );
   });
 
   it("restricts website previews to inline, non-script resources", () => {

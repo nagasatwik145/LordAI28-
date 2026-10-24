@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   ShieldOff,
   Trash2,
-  Unarchive,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -296,7 +295,8 @@ function MindGraphPage() {
   ) => {
     if (!selectedMemory) return;
     try {
-      await updateMemory.mutateAsync({ id: selectedMemory.id, ...patch });
+      const { id: _ignoredId, ...rest } = patch as typeof patch & { id?: string };
+      await updateMemory.mutateAsync({ ...rest, id: selectedMemory.id });
       await queryClient.invalidateQueries({ queryKey: ["mind-graph", "memories", user.id] });
       invalidateBrainContextCache(user.id);
       toast.success(successMessage);
@@ -945,7 +945,7 @@ function MindGraphPage() {
                           }}
                         >
                           {selectedMemory.archived ? (
-                            <Unarchive className="mr-1 h-4 w-4" />
+                            <Archive className="mr-1 h-4 w-4" />
                           ) : (
                             <Archive className="mr-1 h-4 w-4" />
                           )}

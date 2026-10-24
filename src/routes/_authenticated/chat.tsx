@@ -318,7 +318,7 @@ function ChatPage() {
   const calendar = useCalendar();
 
   const [mode, setMode] = usePersistedState<LordMode>("chat-mode", DEFAULT_MODE);
-  const [modelId, setModelId] = usePersistedState("chat-model-id", FREE_CHAT_MODEL_IDS[0]);
+  const [modelId, setModelId] = usePersistedState<string>("chat-model-id", FREE_CHAT_MODEL_IDS[0]);
   const [councilEnabled, setCouncilEnabled] = useState(false);
   const [councilProgress, setCouncilProgress] = useState<CouncilProgress | null>(null);
   const councilEnabledRef = useRef(councilEnabled);

@@ -298,9 +298,7 @@ export function WakeWordProvider({
     } catch (error) {
       if (requestId !== permissionRequestRef.current) return;
       enabledRef.current = false;
-      setErrorMessage(
-        microphonePermissionError(error),
-      );
+      setErrorMessage(microphonePermissionError(error));
       updateState("error");
     } finally {
       if (requestId === permissionRequestRef.current) permissionInFlightRef.current = false;
@@ -362,12 +360,9 @@ export function WakeWordProvider({
     pipelineRef.current?.stopListening();
     updateState("disabled");
   }, [updateState]);
-  const setCommandHandler = useCallback(
-    (handler: ((text: string) => boolean) | null) => {
-      commandHandlerRef.current = handler;
-    },
-    [],
-  );
+  const setCommandHandler = useCallback((handler: ((text: string) => boolean) | null) => {
+    commandHandlerRef.current = handler;
+  }, []);
   const retryLast = useCallback(() => wirePipeline().retryLast(), [wirePipeline]);
   const loadConversation = useCallback(
     async (conversationId: string) => {
@@ -427,7 +422,14 @@ export function WakeWordProvider({
     const handleVisibility = () => {
       if (
         document.visibilityState === "hidden" &&
-        ["requesting_permission", "wake_listening", "activated", "command_listening", "processing", "speaking"].includes(stateRef.current)
+        [
+          "requesting_permission",
+          "wake_listening",
+          "activated",
+          "command_listening",
+          "processing",
+          "speaking",
+        ].includes(stateRef.current)
       ) {
         stop();
         setErrorMessage(
@@ -448,7 +450,14 @@ export function WakeWordProvider({
       if (
         active &&
         !isActive &&
-        ["requesting_permission", "wake_listening", "activated", "command_listening", "processing", "speaking"].includes(stateRef.current)
+        [
+          "requesting_permission",
+          "wake_listening",
+          "activated",
+          "command_listening",
+          "processing",
+          "speaking",
+        ].includes(stateRef.current)
       ) {
         stop();
         setErrorMessage(
@@ -456,12 +465,14 @@ export function WakeWordProvider({
         );
         updateState("error");
       }
-    }).then((handle) => {
-      if (!active) void handle.remove();
-      else listener = handle;
-    }).catch((error: unknown) => {
-      console.error("[voice] Could not subscribe to Android app lifecycle changes.", error);
-    });
+    })
+      .then((handle) => {
+        if (!active) void handle.remove();
+        else listener = handle;
+      })
+      .catch((error: unknown) => {
+        console.error("[voice] Could not subscribe to Android app lifecycle changes.", error);
+      });
     return () => {
       active = false;
       void listener?.remove();
@@ -509,6 +520,7 @@ export function WakeWordProvider({
   return <WakeWordContext.Provider value={value}>{children}</WakeWordContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- custom hook is intentionally exported alongside the provider
 export function useWakeWord() {
   const context = useContext(WakeWordContext);
   if (!context) throw new Error("useWakeWord must be used within WakeWordProvider");

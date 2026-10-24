@@ -27,10 +27,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { cn } from "@/lib/utils";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
-import {
-  parseVoiceMissionCommand,
-  type VoiceMissionCommand,
-} from "@/lib/voice/mission-command";
+import { parseVoiceMissionCommand, type VoiceMissionCommand } from "@/lib/voice/mission-command";
 
 export const Route = createFileRoute("/_authenticated/voice")({
   head: () => ({ meta: [{ title: "LORD AI — Voice Assistant" }] }),
@@ -38,13 +35,7 @@ export const Route = createFileRoute("/_authenticated/voice")({
   component: VoicePage,
 });
 
-type MissionStatus =
-  | "planned"
-  | "running"
-  | "paused"
-  | "completed"
-  | "failed"
-  | "cancelled";
+type MissionStatus = "planned" | "running" | "paused" | "completed" | "failed" | "cancelled";
 
 interface VoiceMissionStep {
   id: string;
@@ -118,11 +109,14 @@ function VoicePage() {
   const [missionResult, setMissionResult] = useState<VoiceMission | null>(null);
   const [recentMissions, setRecentMissions] = useState<VoiceMission[]>([]);
   const initialConversationHandledRef = useRef(false);
-  const proQuery = useQuery({ queryKey: ["pro-entitlement"], queryFn: async () => {
-    const response = await authenticatedFetch("/api/billing/status");
-    if (!response.ok) throw new Error("Could not verify your plan.");
-    return response.json() as Promise<{ pro: boolean; lifetime: boolean }>;
-  } });
+  const proQuery = useQuery({
+    queryKey: ["pro-entitlement"],
+    queryFn: async () => {
+      const response = await authenticatedFetch("/api/billing/status");
+      if (!response.ok) throw new Error("Could not verify your plan.");
+      return response.json() as Promise<{ pro: boolean; lifetime: boolean }>;
+    },
+  });
   const transcriptRef = useRef<HTMLDivElement>(null);
   const stayAtBottomRef = useRef(true);
   const { data: userId } = useQuery({
@@ -167,65 +161,70 @@ function VoicePage() {
     );
   }, []);
 
-  const prepareMissionAction = useCallback(async (command: VoiceMissionCommand, heard: string) => {
-    setMissionBusy(true);
-    try {
-      if (command.action === "progress") {
+  const prepareMissionAction = useCallback(
+    async (command: VoiceMissionCommand, heard: string) => {
+      setMissionBusy(true);
+      try {
+        if (command.action === "progress") {
+          const missions = await fetchMissionList();
+          const mission = missions.find((item) => item.status === "running") ?? missions[0] ?? null;
+          setMissionResult(mission);
+          setMissionNotice(
+            mission
+              ? `${mission.title}: ${mission.progress.percent}% complete (${mission.progress.completed} of ${mission.progress.total} steps). Status: ${mission.status}.`
+              : "There are no saved missions yet. Say “start mission to …” to plan one.",
+          );
+          return;
+        }
+
         const missions = await fetchMissionList();
-        const mission =
-          missions.find((item) => item.status === "running") ?? missions[0] ?? null;
+        const eligible = missions.filter((mission) => {
+          if (command.action === "pause") return mission.status === "running";
+          if (command.action === "resume") return mission.status === "paused";
+          return ["planned", "running", "paused"].includes(mission.status);
+        });
+        if (eligible.length !== 1) {
+          setMissionNotice(
+            eligible.length === 0
+              ? `There is no ${command.action === "pause" ? "running" : command.action === "resume" ? "paused" : "active"} mission to ${command.action}.`
+              : `I found ${eligible.length} possible missions. Open Mission Control and choose one explicitly; no mission was changed.`,
+          );
+          return;
+        }
+        const mission = eligible[0];
         setMissionResult(mission);
-        setMissionNotice(
-          mission
-            ? `${mission.title}: ${mission.progress.percent}% complete (${mission.progress.completed} of ${mission.progress.total} steps). Status: ${mission.status}.`
-            : "There are no saved missions yet. Say “start mission to …” to plan one.",
-        );
-        return;
+        setPendingMissionAction({
+          action: command.action,
+          missionId: mission.id,
+          title: mission.title,
+          heard,
+        });
+        setMissionNotice("");
+      } catch (error) {
+        setMissionNotice(error instanceof Error ? error.message : "Could not inspect missions.");
+      } finally {
+        setMissionBusy(false);
       }
+    },
+    [fetchMissionList],
+  );
 
-      const missions = await fetchMissionList();
-      const eligible = missions.filter((mission) => {
-        if (command.action === "pause") return mission.status === "running";
-        if (command.action === "resume") return mission.status === "paused";
-        return ["planned", "running", "paused"].includes(mission.status);
-      });
-      if (eligible.length !== 1) {
-        setMissionNotice(
-          eligible.length === 0
-            ? `There is no ${command.action === "pause" ? "running" : command.action === "resume" ? "paused" : "active"} mission to ${command.action}.`
-            : `I found ${eligible.length} possible missions. Open Mission Control and choose one explicitly; no mission was changed.`,
-        );
-        return;
-      }
-      const mission = eligible[0];
-      setMissionResult(mission);
-      setPendingMissionAction({
-        action: command.action,
-        missionId: mission.id,
-        title: mission.title,
-        heard,
-      });
+  const handleVoiceCommand = useCallback(
+    (heard: string) => {
+      const command = parseVoiceMissionCommand(heard);
+      if (!command) return false;
+      setPendingMissionAction(null);
+      setMissionResult(null);
       setMissionNotice("");
-    } catch (error) {
-      setMissionNotice(error instanceof Error ? error.message : "Could not inspect missions.");
-    } finally {
-      setMissionBusy(false);
-    }
-  }, [fetchMissionList]);
-
-  const handleVoiceCommand = useCallback((heard: string) => {
-    const command = parseVoiceMissionCommand(heard);
-    if (!command) return false;
-    setPendingMissionAction(null);
-    setMissionResult(null);
-    setMissionNotice("");
-    if (command.action === "start") {
-      setPendingMissionAction({ action: "plan", goal: command.goal, heard });
-    } else {
-      void prepareMissionAction(command, heard);
-    }
-    return true;
-  }, [prepareMissionAction]);
+      if (command.action === "start") {
+        setPendingMissionAction({ action: "plan", goal: command.goal, heard });
+      } else {
+        void prepareMissionAction(command, heard);
+      }
+      return true;
+    },
+    [prepareMissionAction],
+  );
 
   useEffect(() => {
     setCommandHandler(handleVoiceCommand);
@@ -310,12 +309,36 @@ function VoicePage() {
     void submitText(command);
   };
 
-  if (!proQuery.data?.pro) return <AppShell><main className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 text-center">
-    <div className="mb-5 grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-200"><Mic className="h-8 w-8"/></div>
-    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-300">LORD Pro feature</p><h1 className="mt-3 font-display text-3xl font-semibold">Your voice, connected to LORD.</h1>
-    <p className="mt-3 max-w-lg text-muted-foreground">Upgrade to use hands-free voice conversations, spoken responses, and premium voice controls.</p>
-    {proQuery.isLoading ? <p className="mt-6 text-sm text-muted-foreground">Checking your plan…</p> : <Link to="/upgrade" className="mt-7 rounded-xl bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20">Explore LORD Pro</Link>}
-  </main></AppShell>;
+  if (!proQuery.data?.pro)
+    return (
+      <AppShell>
+        <main className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 text-center">
+          <div className="mb-5 grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-200">
+            <Mic className="h-8 w-8" />
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-300">
+            LORD Pro feature
+          </p>
+          <h1 className="mt-3 font-display text-3xl font-semibold">
+            Your voice, connected to LORD.
+          </h1>
+          <p className="mt-3 max-w-lg text-muted-foreground">
+            Upgrade to use hands-free voice conversations, spoken responses, and premium voice
+            controls.
+          </p>
+          {proQuery.isLoading ? (
+            <p className="mt-6 text-sm text-muted-foreground">Checking your plan…</p>
+          ) : (
+            <Link
+              to="/upgrade"
+              className="mt-7 rounded-xl bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20"
+            >
+              Explore LORD Pro
+            </Link>
+          )}
+        </main>
+      </AppShell>
+    );
 
   return (
     <AppShell>
@@ -499,9 +522,9 @@ function VoicePage() {
             Mission control
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Say “start mission to …”, “pause mission”, “resume mission”, “cancel mission”, or
-            “check mission progress”. LORD shows the recognized words and asks you to confirm every
-            change before it happens.
+            Say “start mission to …”, “pause mission”, “resume mission”, “cancel mission”, or “check
+            mission progress”. LORD shows the recognized words and asks you to confirm every change
+            before it happens.
           </p>
           {pendingMissionAction && (
             <div className="mt-3 rounded-lg border border-amber-200/20 bg-amber-200/[0.04] p-3">
@@ -588,7 +611,8 @@ function VoicePage() {
                 {missionResult.steps.map((step, index) => (
                   <li key={step.id} className="border-t border-border/40 pt-2 text-sm">
                     <p>
-                      {index + 1}. {step.title} <span className="text-muted-foreground">· {step.status}</span>
+                      {index + 1}. {step.title}{" "}
+                      <span className="text-muted-foreground">· {step.status}</span>
                     </p>
                     {step.result && (
                       <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
@@ -693,19 +717,19 @@ function VoicePage() {
                 (state === "command_listening" ||
                   state === "wake_listening" ||
                   state === "review") && (
-                <article className="ml-auto max-w-[90%] text-left">
-                  <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-                    {state === "wake_listening"
-                      ? "Wake recognition · live"
-                      : state === "review"
-                        ? "You · review before action"
-                        : "You · live"}
-                  </p>
-                  <p className="whitespace-pre-wrap rounded-xl border border-cyan-200/15 bg-cyan-200/5 px-3 py-2 text-sm text-foreground/80">
-                    {transcript}
-                  </p>
-                </article>
-              )}
+                  <article className="ml-auto max-w-[90%] text-left">
+                    <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+                      {state === "wake_listening"
+                        ? "Wake recognition · live"
+                        : state === "review"
+                          ? "You · review before action"
+                          : "You · live"}
+                    </p>
+                    <p className="whitespace-pre-wrap rounded-xl border border-cyan-200/15 bg-cyan-200/5 px-3 py-2 text-sm text-foreground/80">
+                      {transcript}
+                    </p>
+                  </article>
+                )}
               {reply && state === "processing" && (
                 <article className="mr-auto max-w-[90%] text-left">
                   <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -744,7 +768,6 @@ function VoicePage() {
             Send
           </button>
         </form>
-
       </main>
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
         <SheetContent

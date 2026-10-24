@@ -60,6 +60,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- custom hook is intentionally exported alongside the provider
 export function useAppContext() {
   const context = useContext(AppContext);
   if (!context) {

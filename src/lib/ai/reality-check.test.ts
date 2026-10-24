@@ -67,6 +67,8 @@ describe("LORD Reality Check", () => {
       "The example system supports deterministic verification.",
       sources,
     );
+    expect(claims).not.toBeNull();
+    if (!claims) return;
     expect(claims[0]).toMatchObject({ assessment: "unclear" });
     expect(claims[0]).not.toHaveProperty("evidence");
   });

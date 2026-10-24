@@ -1,5 +1,17 @@
-import { describe, expect, it } from "vitest";
-import { hasConfiguredLifetimeIdentity, isEntitlementActive } from "./entitlements.server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  hasConfiguredLifetimeIdentity,
+  hasProEntitlement,
+  isEntitlementActive,
+} from "./entitlements.server";
+
+const supabaseAdmin = vi.hoisted(() => ({
+  from: vi.fn(),
+}));
+
+vi.mock("@/integrations/supabase/client.server", () => ({
+  supabaseAdmin,
+}));
 
 const identities = {
   "nagasatwik145@gmail.com": "11111111-1111-4111-8111-111111111111",
@@ -8,6 +20,37 @@ const identities = {
 };
 
 describe("Pro entitlements", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects expired subscriptions and locks expired Pro access", async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { status: "active", expires_at: past },
+      error: null,
+    });
+    supabaseAdmin.from.mockImplementation(() => ({
+      select: () => ({
+        eq: () => ({ maybeSingle }),
+      }),
+      update: () => ({
+        eq: () => ({
+          eq: () => ({ error: null }),
+        }),
+      }),
+    }));
+
+    const result = await hasProEntitlement({
+      id: "user-1",
+      email: "member@example.com",
+      email_confirmed_at: "2026-01-01T00:00:00Z",
+    });
+
+    expect(result).toBe(false);
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+  });
+
   it("requires verified email and an immutable matching user ID for each lifetime grant", () => {
     for (const [email, id] of Object.entries(identities)) {
       process.env.LORD_LIFETIME_PRO_USERS = `${id}:${email}`;

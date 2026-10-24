@@ -26,12 +26,7 @@ export type MissionStatus =
   | "completed"
   | "failed";
 export type MissionStepStatus =
-  | "pending"
-  | "running"
-  | "retrying"
-  | "completed"
-  | "failed"
-  | "skipped";
+  "pending" | "running" | "retrying" | "completed" | "failed" | "skipped";
 
 export interface MissionStepResult {
   content?: string;
@@ -90,7 +85,12 @@ export interface MissionPlan {
 
 const PlannerStepSchema = z
   .object({
-    id: z.string().trim().min(1).max(40).regex(/^[a-zA-Z0-9_-]+$/),
+    id: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^[a-zA-Z0-9_-]+$/),
     action: MissionActionSchema,
     arguments: z.record(z.string(), z.unknown()),
     description: z.string().trim().min(1).max(500),
@@ -153,14 +153,24 @@ export function validateMissionPlan(
     summary: plan.summary,
     questions: plan.questions,
     steps: plan.steps.map(
-      ({ retryPolicy: _retryPolicy, requiresApproval: _requiresApproval, status: _status, attempts: _attempts, result: _result, ...step }) => step,
+      ({
+        retryPolicy: _retryPolicy,
+        requiresApproval: _requiresApproval,
+        status: _status,
+        attempts: _attempts,
+        result: _result,
+        ...step
+      }) => step,
     ),
   });
-  if (!parsed.success) throw new MissionPlanError("The mission plan does not match the required schema.");
+  if (!parsed.success)
+    throw new MissionPlanError("The mission plan does not match the required schema.");
 
   if (plan.questions.length > 0) {
     if (plan.steps.length > 0) {
-      throw new MissionPlanError("A mission that needs clarification cannot contain executable steps.");
+      throw new MissionPlanError(
+        "A mission that needs clarification cannot contain executable steps.",
+      );
     }
     return;
   }
@@ -286,7 +296,8 @@ export async function planMission(
   });
 
   const raw = PlannerResponseSchema.safeParse(parsePlannerJson(response.text));
-  if (!raw.success) throw new MissionPlanError("LORD returned an invalid or unsupported mission plan.");
+  if (!raw.success)
+    throw new MissionPlanError("LORD returned an invalid or unsupported mission plan.");
   const plan: MissionPlan = {
     ...raw.data,
     steps: raw.data.steps.map((step) => ({
@@ -342,7 +353,8 @@ export function updateBlockedSteps(steps: MissionStep[]): MissionStep[] {
     if (
       (step.status === "pending" || step.status === "retrying") &&
       step.dependencies.some(
-        (dependency) => statuses.get(dependency) === "failed" || statuses.get(dependency) === "skipped",
+        (dependency) =>
+          statuses.get(dependency) === "failed" || statuses.get(dependency) === "skipped",
       )
     ) {
       return { ...step, status: "skipped" as const };

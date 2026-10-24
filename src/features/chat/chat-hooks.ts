@@ -6,14 +6,20 @@ import type { ChatMessage, Conversation } from "@/lib/phase2/types";
 
 const db = supabase;
 
+async function requireSignedInUser() {
+  const {
+    data: { user },
+    error,
+  } = await db.auth.getUser();
+  if (error || !user) throw new Error("Unauthorized");
+  return user;
+}
+
 export function useConversations() {
   return useQuery({
     queryKey: ["chat", "conversations"],
     queryFn: async (): Promise<Conversation[]> => {
-      const {
-        data: { user },
-      } = await db.auth.getUser();
-      if (!user) throw new Error("Unauthorized");
+      const user = await requireSignedInUser();
 
       const { data, error } = await db
         .from("conversations")
@@ -32,7 +38,13 @@ export function useConversation(id: string | null) {
     queryKey: ["chat", "conversation", id],
     queryFn: async (): Promise<Conversation | null> => {
       if (!id) return null;
-      const { data, error } = await db.from("conversations").select("*").eq("id", id).single();
+      const user = await requireSignedInUser();
+      const { data, error } = await db
+        .from("conversations")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .single();
 
       if (error || !data) return null;
       return mapConversation(data);
@@ -46,10 +58,12 @@ export function useMessages(conversationId: string | null) {
     queryKey: ["chat", "messages", conversationId],
     queryFn: async (): Promise<ChatMessage[]> => {
       if (!conversationId) return [];
+      const user = await requireSignedInUser();
       const { data, error } = await db
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
@@ -76,6 +90,7 @@ export function useBranchConversation() {
         .from("conversations")
         .select("*")
         .eq("id", conversationId)
+        .eq("user_id", userId)
         .single();
 
       if (!source) throw new Error("Source conversation not found");
@@ -181,7 +196,12 @@ export function useRegenerateMessage() {
       conversationId: string;
       userId: string;
     }): Promise<ChatMessage> => {
-      const { data: existing } = await db.from("messages").select("*").eq("id", messageId).single();
+      const { data: existing } = await db
+        .from("messages")
+        .select("*")
+        .eq("id", messageId)
+        .eq("user_id", userId)
+        .single();
 
       if (!existing) throw new Error("Message not found");
 
@@ -216,10 +236,12 @@ export function useConversationStats(conversationId: string | null) {
     queryKey: ["chat", "stats", conversationId],
     queryFn: async () => {
       if (!conversationId) return null;
+      const user = await requireSignedInUser();
       const { data, error } = await db
         .from("messages")
         .select("role, content, created_at, model")
-        .eq("conversation_id", conversationId);
+        .eq("conversation_id", conversationId)
+        .eq("user_id", user.id);
 
       if (error || !data) return null;
 

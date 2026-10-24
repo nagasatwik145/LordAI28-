@@ -97,6 +97,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   return <CalendarContext.Provider value={value}>{children}</CalendarContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- custom hook is intentionally exported alongside the provider
 export function useCalendar() {
   const context = useContext(CalendarContext);
   if (!context) {

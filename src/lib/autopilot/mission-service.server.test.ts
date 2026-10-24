@@ -155,9 +155,11 @@ describe("mission service", () => {
       });
       expect(mission.status).toBe("planned");
       expect(mission.plan.steps[0]?.status).toBe("pending");
-      await expect(controlMission(store, "other-user", mission.id, "cancel")).rejects.toMatchObject({
-        kind: "not_found",
-      });
+      await expect(controlMission(store, "other-user", mission.id, "cancel")).rejects.toMatchObject(
+        {
+          kind: "not_found",
+        },
+      );
     } finally {
       if (previousKey === undefined) delete process.env.OPENROUTER_API_KEY;
       else process.env.OPENROUTER_API_KEY = previousKey;

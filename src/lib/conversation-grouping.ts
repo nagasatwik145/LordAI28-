@@ -201,7 +201,9 @@ export function sortRootConversations<T extends ConversationRow>(conversations: 
   };
   if (!hasManualOrder) {
     // Legacy / not-yet-ordered: newest-first, stable by id.
-    return conversations.slice().sort((a, b) => pinnedFirst(a, b) || timeOf(b) - timeOf(a) || (a.id < b.id ? -1 : 1));
+    return conversations
+      .slice()
+      .sort((a, b) => pinnedFirst(a, b) || timeOf(b) - timeOf(a) || (a.id < b.id ? -1 : 1));
   }
   return conversations
     .slice()

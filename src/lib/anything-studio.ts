@@ -248,15 +248,12 @@ export function buildDeliverablePrompt(
 
 export function buildSandboxedWebsitePreview(content: string): string {
   const policy =
-  '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: blob:; style-src \'unsafe-inline\'; font-src data:;">';
+    "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:;\">";
   if (/<head(?:\s[^>]*)?>/i.test(content)) {
-  return content.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}${policy}`);
+    return content.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}${policy}`);
   }
   if (/<html(?:\s[^>]*)?>/i.test(content)) {
-  return content.replace(
-    /<html(?:\s[^>]*)?>/i,
-    (html) => `${html}<head>${policy}</head>`,
-  );
+    return content.replace(/<html(?:\s[^>]*)?>/i, (html) => `${html}<head>${policy}</head>`);
   }
   return `<!doctype html><html><head>${policy}</head><body>${content}</body></html>`;
 }

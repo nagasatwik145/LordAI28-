@@ -61,7 +61,7 @@ function summarizeMessages(messages: readonly ChatMessage[], tokenLimit: number)
     return `${message.role}: ${excerpt}`;
   });
   return clipToTokens(
-    `Earlier conversation excerpts (oldest first):\n${lines.join("\n")}`,
+    `Earlier conversation summary: (oldest first)\n${lines.join("\n")}`,
     tokenLimit,
   );
 }
