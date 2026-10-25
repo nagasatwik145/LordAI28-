@@ -1,6 +1,9 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
+import { getOAuthRedirect } from "@/lib/native-oauth";
 import { AppShell } from "@/components/lord/AppShell";
 import { HudPanel } from "@/components/lord/HudPanel";
 import { Loader2, Mail, Lock, User as UserIcon, Chrome } from "lucide-react";
@@ -32,13 +35,13 @@ function AuthPage() {
 
   useEffect(() => {
     let mounted = true;
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!mounted) return;
-      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
-        navigateAfterAuth();
-      }
-    });
+    const authListener = Capacitor.isNativePlatform()
+      ? null
+      : supabase.auth.onAuthStateChange((event, session) => {
+          if (mounted && (event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+            navigateAfterAuth();
+          }
+        });
 
     const initializeAuth = async () => {
       if (typeof window === "undefined") return;
@@ -53,7 +56,7 @@ function AuthPage() {
 
     return () => {
       mounted = false;
-      authListener.subscription.unsubscribe();
+      authListener?.data.subscription.unsubscribe();
     };
   }, [navigateAfterAuth]);
 
@@ -98,17 +101,21 @@ function AuthPage() {
     setInfo(null);
     setBusy(true);
     try {
-      const redirectUrl = `${window.location.origin}/auth`;
-      const { error } = await supabase.auth.signInWithOAuth({
+      const native = Capacitor.isNativePlatform();
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: getOAuthRedirect(native, window.location.origin),
+          ...(native ? { skipBrowserRedirect: true } : {}),
           queryParams: { prompt: "select_account" },
         },
       });
       if (error) throw error;
+      if (native) {
+        if (!data.url) throw new Error("Google sign-in could not be started.");
+        await Browser.open({ url: data.url });
+      }
     } catch (err) {
-      console.error("[Auth] Google OAuth error:", err);
       setError(err instanceof Error ? err.message : "Google sign-in failed");
     } finally {
       setBusy(false);

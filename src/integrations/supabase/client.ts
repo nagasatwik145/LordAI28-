@@ -53,6 +53,7 @@ function createSupabaseClient() {
         local: typeof window !== "undefined" ? localStorage : undefined,
       }),
       detectSessionInUrl: true,
+      flowType: "pkce",
       persistSession: true,
       autoRefreshToken: true,
     },

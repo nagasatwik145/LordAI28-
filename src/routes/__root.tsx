@@ -88,7 +88,12 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
     : networkFailure
       ? "LORD AI could not connect to its server. Check your connection and try again."
       : "LORD AI hit an unexpected startup error. Try again, or contact support with the diagnostic code below.";
-  const diagnosticCode = `STARTUP-${displayError.name.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "ERROR"}`;
+  const diagnosticCode = `STARTUP-${
+    displayError.name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 12) || "ERROR"
+  }`;
   console.error("[startup] root error boundary", {
     diagnosticCode,
     errorName: displayError.name.slice(0, 80),
@@ -222,6 +227,17 @@ function RootComponent() {
     );
     let disposed = false;
     let removeListeners: () => void = () => {};
+    let removeOAuthListener: () => void = () => {};
+    void import("../lib/native-oauth")
+      .then(({ registerNativeOAuthCallbacks }) =>
+        registerNativeOAuthCallbacks(() => {
+          void router.navigate({ to: "/chat", replace: true });
+        }),
+      )
+      .then((remove) => {
+        if (disposed) remove();
+        else removeOAuthListener = remove;
+      });
     void import("../lib/mobile-native")
       .then(({ registerMobileNavigation }) =>
         registerMobileNavigation(
@@ -245,6 +261,7 @@ function RootComponent() {
     return () => {
       disposed = true;
       removeListeners();
+      removeOAuthListener();
     };
   }, [router]);
 
