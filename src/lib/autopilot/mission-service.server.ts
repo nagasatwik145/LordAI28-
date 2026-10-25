@@ -22,13 +22,13 @@ import {
   MissionPlanError,
   actionDescription,
   missionActionSchema,
-  missionProgress,
   nextReadyStep,
   planMission,
   updateBlockedSteps,
   validateMissionPlan,
   type MissionAction,
   type MissionPlan,
+  type MissionEvent,
   type MissionStatus,
   type MissionStep,
   type MissionStepResult,
@@ -42,6 +42,8 @@ import {
 const EXECUTION_LEASE_MS = 120_000;
 const MAX_RESULT_BYTES = 180_000;
 const MAX_ANSWER_LENGTH = 2_000;
+const MAX_MISSION_EVENTS = 100;
+const MAX_RETRY_DELAY_MS = 30_000;
 
 export class MissionServiceError extends Error {
   constructor(
@@ -95,6 +97,84 @@ function missionJson(value: unknown): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
 
+function appendMissionEvent(
+  record: MissionRecord,
+  type: string,
+  message: string,
+  stepId?: string,
+): void {
+  const event = createMissionEvent(type, message, stepId);
+  record.events = [...record.events, event].slice(-MAX_MISSION_EVENTS);
+}
+
+function createMissionEvent(type: string, message: string, stepId?: string): MissionEvent {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    timestamp: new Date().toISOString(),
+    message,
+    ...(stepId ? { stepId } : {}),
+  };
+}
+
+async function approvalScopeHash(record: MissionRecord): Promise<string> {
+  const scope = record.plan.steps.map((step) => ({
+    id: step.id,
+    action: step.action,
+    arguments: step.arguments,
+    description: step.description,
+    expectedResult: step.expectedResult,
+    dependencies: step.dependencies,
+  }));
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(scope)),
+  );
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function retryDelayMs(attempts: number): number {
+  return Math.min(1_000 * 2 ** Math.max(0, attempts - 1), MAX_RETRY_DELAY_MS);
+}
+
+function awaitWithAbort<T>(work: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const onAbort = () => {
+      cleanup();
+      reject(signal.reason ?? new Error("Mission action was aborted."));
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    try {
+      work().then(
+        (value) => {
+          cleanup();
+          resolve(value);
+        },
+        (error: unknown) => {
+          cleanup();
+          reject(error);
+        },
+      );
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}
+
+function isRecoverableError(error: unknown): boolean {
+  if (error instanceof MissionServiceError) {
+    return error.kind === "tool";
+  }
+  if (error instanceof GameServiceError) return false;
+  return true;
+}
+
 function planningPlaceholder(): MissionPlan {
   return {
     title: "Planning mission",
@@ -127,6 +207,7 @@ export async function createMissionPlan(
     userId: string;
     identity: { id: string; email?: string; email_confirmed_at?: string | null };
     objective: string;
+    idempotencyKey?: string;
     signal?: AbortSignal;
   },
 ): Promise<MissionRecord> {
@@ -147,13 +228,44 @@ export async function createMissionPlan(
   if (!(await hasProEntitlement(input.identity))) {
     throw new MissionServiceError("forbidden", "LORD Autopilot requires a LORD Pro subscription.");
   }
-
-  const record = await store.create({
-    userId: input.userId,
-    objective,
-    status: "planning",
-    plan: planningPlaceholder(),
-  });
+  let record = input.idempotencyKey
+    ? await store.getByIdempotencyKey(input.userId, input.idempotencyKey)
+    : null;
+  if (record && record.objective !== objective) {
+    throw new MissionServiceError(
+      "conflict",
+      "This request ID was already used for a different mission goal.",
+    );
+  }
+  if (record && record.status !== "planning") return record;
+  if (!record) {
+    try {
+      record = await store.create({
+        userId: input.userId,
+        objective,
+        status: "planning",
+        plan: planningPlaceholder(),
+        idempotencyKey: input.idempotencyKey,
+        events: [createMissionEvent("mission_created", "Mission created; planning started.")],
+      });
+    } catch (error) {
+      if (input.idempotencyKey) {
+        const duplicate = await store.getByIdempotencyKey(input.userId, input.idempotencyKey);
+        if (duplicate && duplicate.objective !== objective) {
+          throw new MissionServiceError(
+            "conflict",
+            "This request ID was already used for a different mission goal.",
+          );
+        }
+        if (duplicate && duplicate.status !== "planning") return duplicate;
+        if (duplicate) record = duplicate;
+        else throw error;
+      } else {
+        throw error;
+      }
+    }
+  }
+  if (!record) throw new MissionPersistenceError("Mission could not be saved.");
   try {
     const plan = await planMission(
       objective,
@@ -171,10 +283,21 @@ export async function createMissionPlan(
     );
     record.plan = plan;
     record.status = statusForPlan(plan);
+    appendMissionEvent(
+      record,
+      plan.questions.length ? "clarification_requested" : "plan_ready",
+      plan.questions.length
+        ? "The plan needs clarification before it can run."
+        : "A validated plan is ready for review.",
+    );
+    if (record.status === "needs_approval") {
+      appendMissionEvent(record, "approval_requested", "A consequential action requires approval.");
+    }
     return await saveRecord(store, record, record.revision);
   } catch (error) {
     record.status = "failed";
     record.result = missionJson({ error: "Planning failed. Check model availability and retry." });
+    appendMissionEvent(record, "planning_failed", "Mission planning failed.");
     await saveRecord(store, record, record.revision);
     if (error instanceof MissionPlanError) {
       throw new MissionServiceError("invalid", error.message);
@@ -226,6 +349,15 @@ export async function clarifyMissionPlan(
   record.plan = plan;
   record.status = statusForPlan(plan);
   record.result = null;
+  record.approvedScopeHash = null;
+  appendMissionEvent(
+    record,
+    plan.questions.length ? "clarification_requested" : "plan_updated",
+    plan.questions.length ? "The updated plan needs clarification." : "The plan was updated.",
+  );
+  if (record.status === "needs_approval") {
+    appendMissionEvent(record, "approval_requested", "A consequential action requires approval.");
+  }
   return saveRecord(store, record, record.revision);
 }
 
@@ -239,9 +371,10 @@ export async function approveMission(
   if (record.status !== "needs_approval") {
     throw new MissionServiceError("conflict", "This mission is not waiting for approval.");
   }
-  record.plan.steps = record.plan.steps.map((step) => ({ ...step, requiresApproval: false }));
   validateMissionPlan(record.plan, ALL_MISSION_ACTIONS, true);
+  record.approvedScopeHash = await approvalScopeHash(record);
   record.status = "planned";
+  appendMissionEvent(record, "approved", "The reviewed mission plan was approved.");
   return saveRecord(store, record, record.revision);
 }
 
@@ -258,6 +391,7 @@ export async function controlMission(
       throw new MissionServiceError("conflict", "Only a running mission can be paused.");
     }
     record.status = "paused";
+    appendMissionEvent(record, "paused", "Mission paused by the user.");
     return saveRecord(store, record, record.revision);
   }
   if (action === "cancel") {
@@ -271,13 +405,18 @@ export async function controlMission(
         ? { ...step, status: "skipped" }
         : step,
     );
+    appendMissionEvent(record, "cancelled", "Mission cancelled by the user.");
     return saveRecord(store, record, record.revision);
   }
   if (action === "resume") {
     if (record.status !== "paused") {
       throw new MissionServiceError("conflict", "Only a paused mission can be resumed.");
     }
+    if (record.executionLeaseUntil && Date.parse(record.executionLeaseUntil) > Date.now()) {
+      throw new MissionServiceError("busy", "The paused worker is still stopping.");
+    }
     record.status = "planned";
+    appendMissionEvent(record, "resumed", "Mission resumed by the user.");
     return saveRecord(store, record, record.revision);
   }
 
@@ -302,6 +441,15 @@ export async function controlMission(
   record.plan.steps = updateBlockedSteps(record.plan.steps);
   record.status = "planned";
   record.result = null;
+  record.plan.steps = record.plan.steps.map((step) =>
+    step.status === "pending" && step.id === failedStep.id ? { ...step, retryAt: undefined } : step,
+  );
+  appendMissionEvent(
+    record,
+    "retry_requested",
+    `Retry requested for step ${failedStep.id}.`,
+    failedStep.id,
+  );
   return saveRecord(store, record, record.revision);
 }
 
@@ -351,7 +499,7 @@ function isJalwaCreateArgs(
   );
 }
 
-function hasThreeDimensionalGameSpec(spec: { readonly dimension?: string } | Game3DSpec): boolean {
+function hasThreeDimensionalGameSpec(spec: GeneratedGameSpec): boolean {
   return "dimension" in spec ? spec.dimension === "3d" : false;
 }
 
@@ -378,7 +526,7 @@ export function createMissionExecutor(): MissionExecutor {
       if (!apiKey) throw new MissionServiceError("not_configured", "Web search is not configured.");
       if (!checkWebSearchRateLimit(userId)) {
         throw new MissionServiceError(
-          "tool",
+          "rate_limited",
           "Web search is rate limited. Try again in one minute.",
         );
       }
@@ -511,47 +659,81 @@ export async function executeMissionStep(
     if (!current) throw new MissionServiceError("not_found", "Mission not found.");
     return current;
   }
-  let record = await store.get(missionId, userId);
-  if (!record) throw new MissionServiceError("not_found", "Mission not found.");
-  if (record.status === "needs_approval" || record.status === "needs_clarification") {
-    throw new MissionServiceError(
-      "conflict",
-      "Resolve the mission's approval or clarification first.",
-    );
-  }
-  if (
-    record.status === "completed" ||
-    record.status === "cancelled" ||
-    record.status === "failed"
-  ) {
-    return record;
-  }
-  if (record.status === "running") {
-    const lease = record.executionLeaseUntil ? Date.parse(record.executionLeaseUntil) : 0;
-    if (lease > Date.now())
-      throw new MissionServiceError("busy", "Another worker is running this mission.");
-    record.plan.steps = record.plan.steps.map((step) =>
-      step.status === "running" ? { ...step, status: "retrying" } : step,
-    );
-    record.status = "paused";
-    record.executionLeaseUntil = null;
-    record = await saveRecord(store, record, record.revision);
-  }
-  if (record.status !== "planned" && record.status !== "paused") {
-    throw new MissionServiceError(
-      "conflict",
-      "This mission cannot be executed in its current state.",
-    );
-  }
-
   const controller = new AbortController();
   localRuns.set(localKey, controller);
   try {
+    let record = await store.get(missionId, userId);
+    if (!record) throw new MissionServiceError("not_found", "Mission not found.");
+    if (record.status === "needs_approval" || record.status === "needs_clarification") {
+      throw new MissionServiceError(
+        "conflict",
+        "Resolve the mission's approval or clarification first.",
+      );
+    }
+    if (
+      record.status === "completed" ||
+      record.status === "cancelled" ||
+      record.status === "failed"
+    ) {
+      return record;
+    }
+    if (record.status === "running") {
+      const lease = record.executionLeaseUntil ? Date.parse(record.executionLeaseUntil) : 0;
+      if (lease > Date.now())
+        throw new MissionServiceError("busy", "Another worker is running this mission.");
+      const now = new Date();
+      record.plan.steps = record.plan.steps.map((step) => {
+        if (step.status !== "running") return step;
+        const exhausted =
+          step.attempts >= MAX_MISSION_ATTEMPTS || step.attempts > step.retryPolicy.maxRetries;
+        return {
+          ...step,
+          status: exhausted ? "failed" : "retrying",
+          retryAt: exhausted
+            ? undefined
+            : new Date(now.getTime() + retryDelayMs(step.attempts)).toISOString(),
+          completedAt: exhausted ? now.toISOString() : undefined,
+          result: {
+            error: exhausted
+              ? "The interrupted step reached its retry limit."
+              : "The previous worker stopped before the step was saved.",
+          },
+        };
+      });
+      record.plan.steps = updateBlockedSteps(record.plan.steps);
+      record.status = "planned";
+      record.executionLeaseUntil = null;
+      appendMissionEvent(
+        record,
+        "recovered",
+        "Recovered mission state after an expired worker lease.",
+      );
+      record = await saveRecord(store, record, record.revision);
+    }
+    if (record.status !== "planned" && record.status !== "paused") {
+      throw new MissionServiceError(
+        "conflict",
+        "This mission cannot be executed in its current state.",
+      );
+    }
+
+    const waitingStep = nextReadyStep(record.plan.steps);
+    const retryAt = waitingStep?.retryAt ? Date.parse(waitingStep.retryAt) : 0;
+    if (retryAt > Date.now()) {
+      if (record.status === "paused") {
+        record.status = "planned";
+        appendMissionEvent(record, "resumed", "Mission resumed after an interrupted worker.");
+        return await saveRecord(store, record, record.revision);
+      }
+      return record;
+    }
+
     const claimed = {
       ...record,
       status: "running" as const,
       executionLeaseUntil: new Date(Date.now() + EXECUTION_LEASE_MS).toISOString(),
     };
+    appendMissionEvent(claimed, "worker_started", "Mission execution started.");
     record = await saveRecord(store, claimed, record.revision);
     const readyStep = nextReadyStep(record.plan.steps);
     if (!readyStep) {
@@ -561,11 +743,18 @@ export async function executeMissionStep(
       );
       record.status = hasFailed ? "failed" : "completed";
       record.executionLeaseUntil = null;
+      appendMissionEvent(
+        record,
+        hasFailed ? "mission_failed" : "mission_completed",
+        hasFailed
+          ? "Mission finished with unresolved steps."
+          : "All mission steps completed successfully.",
+      );
       record.result = missionJson({
-        summary: hasFailed
-          ? "The mission ended with one or more incomplete steps."
-          : record.plan.summary,
-        progress: missionProgress(record.plan.steps),
+        summary: hasFailed ? "The mission ended with unresolved work." : record.plan.summary,
+        unresolvedSteps: record.plan.steps
+          .filter((step) => step.status === "failed" || step.status === "skipped")
+          .map((step) => ({ id: step.id, description: step.description, result: step.result })),
         steps: record.plan.steps.map(({ id, action, status, result }) => ({
           id,
           action,
@@ -575,42 +764,68 @@ export async function executeMissionStep(
       });
       return await saveRecord(store, record, record.revision);
     }
-    if (readyStep.requiresApproval) {
+    if (
+      readyStep.requiresApproval &&
+      record.approvedScopeHash !== (await approvalScopeHash(record))
+    ) {
       record.status = "needs_approval";
       record.executionLeaseUntil = null;
+      appendMissionEvent(
+        record,
+        "approval_requested",
+        "The proposed action changed and requires a fresh approval.",
+        readyStep.id,
+      );
       return await saveRecord(store, record, record.revision);
     }
 
+    const attemptStartedAt = new Date().toISOString();
     const claimedStep: MissionStep = {
       ...readyStep,
       status: "running",
       attempts: readyStep.attempts + 1,
+      startedAt: readyStep.startedAt ?? attemptStartedAt,
+      lastAttemptAt: attemptStartedAt,
+      retryAt: undefined,
+      completedAt: undefined,
       result: undefined,
     };
     record.plan.steps = record.plan.steps.map((step) =>
       step.id === readyStep.id ? claimedStep : step,
+    );
+    appendMissionEvent(
+      record,
+      "step_started",
+      `Started step: ${claimedStep.description}`,
+      claimedStep.id,
     );
     record = await saveRecord(store, record, record.revision);
 
     const timeout = AbortSignal.timeout(claimedStep.timeoutMs);
     const signal = AbortSignal.any([controller.signal, timeout]);
     let result: MissionStepResult;
+    let recoverableFailure = false;
     try {
-      result = await execute({
-        userId,
-        identity,
-        missionId,
-        objective: record.objective,
-        step: claimedStep,
-        completedSteps: record.plan.steps,
+      result = await awaitWithAbort(
+        () =>
+          execute({
+            userId,
+            identity,
+            missionId,
+            objective: record.objective,
+            step: claimedStep,
+            completedSteps: record.plan.steps,
+            signal,
+          }),
         signal,
-      });
+      );
       const resultSize = JSON.stringify(result).length;
       if (resultSize > MAX_RESULT_BYTES) {
         throw new MissionServiceError("tool", "Tool output exceeded the allowed size.");
       }
     } catch (error) {
       result = errorResult(error);
+      recoverableFailure = timeout.aborted || isRecoverableError(error);
     }
 
     const latest = await store.get(missionId, userId);
@@ -618,27 +833,74 @@ export async function executeMissionStep(
     const latestStep = latest.plan.steps.find((step) => step.id === claimedStep.id);
     if (!latestStep) throw new MissionPersistenceError("The running mission step is missing.");
     if (latest.status === "cancelled") return latest;
+    const interruptedByPause = controller.signal.aborted && latest.status === "paused";
+    const retryable = !!result.error && recoverableFailure;
+    const mayRetry =
+      latestStep.attempts < MAX_MISSION_ATTEMPTS &&
+      latestStep.attempts <= latestStep.retryPolicy.maxRetries &&
+      (interruptedByPause || retryable);
+    const nextRetryAt =
+      mayRetry && !interruptedByPause
+        ? new Date(Date.now() + retryDelayMs(latestStep.attempts)).toISOString()
+        : undefined;
     latest.plan.steps = latest.plan.steps.map((step) => {
       if (step.id !== claimedStep.id) return step;
-      if (controller.signal.aborted && latest.status === "paused") {
+      if (interruptedByPause) {
         return {
           ...step,
           status: "retrying",
           result: { error: "Paused before the tool finished." },
         };
       }
-      return result.error
-        ? {
-            ...step,
-            status:
-              step.attempts < MAX_MISSION_ATTEMPTS && step.attempts <= step.retryPolicy.maxRetries
-                ? "retrying"
-                : "failed",
-            result,
-          }
-        : { ...step, status: "completed", result };
+      if (result.error) {
+        return mayRetry
+          ? { ...step, status: "retrying", retryAt: nextRetryAt, result }
+          : {
+              ...step,
+              status: "failed",
+              completedAt: new Date().toISOString(),
+              retryAt: undefined,
+              result,
+            };
+      }
+      return {
+        ...step,
+        status: "completed",
+        completedAt: new Date().toISOString(),
+        retryAt: undefined,
+        result,
+      };
     });
+    appendMissionEvent(
+      latest,
+      interruptedByPause
+        ? "step_interrupted"
+        : result.error
+          ? mayRetry
+            ? "step_retry_scheduled"
+            : "step_failed"
+          : "step_completed",
+      interruptedByPause
+        ? `Paused step: ${claimedStep.description}`
+        : result.error
+          ? mayRetry
+            ? `Step failed; retry scheduled: ${claimedStep.description}`
+            : `Step failed: ${claimedStep.description}`
+          : `Completed step: ${claimedStep.description}`,
+      claimedStep.id,
+    );
+    const previousStatuses = new Map(latest.plan.steps.map((step) => [step.id, step.status]));
     latest.plan.steps = updateBlockedSteps(latest.plan.steps);
+    for (const step of latest.plan.steps) {
+      if (previousStatuses.get(step.id) !== "skipped" && step.status === "skipped") {
+        appendMissionEvent(
+          latest,
+          "step_blocked",
+          `Step skipped because a prerequisite did not complete: ${step.description}`,
+          step.id,
+        );
+      }
+    }
     latest.executionLeaseUntil = null;
     const completed = latest.plan.steps.filter((step) => step.status === "completed").length;
     const remaining = latest.plan.steps.some(
@@ -655,8 +917,10 @@ export async function executeMissionStep(
         summary:
           latest.status === "completed"
             ? latest.plan.summary
-            : "The mission ended with one or more incomplete steps.",
-        progress: missionProgress(latest.plan.steps),
+            : "The mission ended with unresolved work.",
+        unresolvedSteps: latest.plan.steps
+          .filter((step) => step.status === "failed" || step.status === "skipped")
+          .map((step) => ({ id: step.id, description: step.description, result: step.result })),
         completedSteps: completed,
         steps: latest.plan.steps.map(({ id, action, status, result: stepResult }) => ({
           id,

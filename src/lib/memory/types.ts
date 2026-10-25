@@ -63,6 +63,7 @@ export interface MemoryRecord {
 export interface MemorySettings {
   user_id: string;
   memory_enabled: boolean;
+  personalization_enabled: boolean;
   auto_save: boolean;
   ask_before_save: boolean;
   confidence_threshold: number;
@@ -82,6 +83,7 @@ export function isMemoryActive(expiresAt: string | null | undefined, now = Date.
 export const DEFAULT_MEMORY_SETTINGS: MemorySettings = {
   user_id: "",
   memory_enabled: true,
+  personalization_enabled: true,
   auto_save: true,
   ask_before_save: true,
   confidence_threshold: 0.65,

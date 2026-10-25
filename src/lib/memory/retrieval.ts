@@ -3,7 +3,7 @@
  *
  * Given a query (the current user turn + recent context) and the user's stored
  * memories, rank by relevance and return only the most useful subset:
- *   • Pinned memories are always included (user-declared important).
+ *   • Pinned memories rank first only when they match the current request.
  *   • The rest are ranked by cosine similarity of embeddings.
  *   • A hard cap (MEMORY_RETRIEVAL_LIMIT) and a token budget keep context small
  *     to minimise token usage.
@@ -15,7 +15,7 @@
 
 import { embed, cosineSimilarity } from "./embeddings";
 import { MEMORY_RETRIEVAL_LIMIT, MEMORY_CONTEXT_TOKEN_BUDGET } from "./constants";
-import { isMemoryActive, type MemoryRecord } from "./types";
+import { isMemoryActive, isSensitive, type MemoryRecord } from "./types";
 
 function estimateTokens(s: string): number {
   return Math.ceil(s.length / 4);
@@ -29,6 +29,8 @@ export interface RetrievalOptions {
   minSimilarity?: number;
   /** When true, skip embedding entirely and rank by keyword overlap. */
   lightweight?: boolean;
+  projectId?: string | null;
+  userId?: string;
 }
 
 export interface RetrievedMemory {
@@ -47,19 +49,22 @@ export async function retrieveMemories(
 ): Promise<RetrievedMemory[]> {
   const limit = options.limit ?? MEMORY_RETRIEVAL_LIMIT;
   const tokenBudget = options.tokenBudget ?? MEMORY_CONTEXT_TOKEN_BUDGET;
-  const minSimilarity = options.minSimilarity ?? 0;
+  const minSimilarity = options.minSimilarity ?? 0.08;
 
-  if (options.enabled === false) return [];
+  if (options.enabled === false || !query.trim()) return [];
   const eligibleMemories = memories.filter(
     (memory) =>
       memory.confirmation_status !== "suggested" &&
       memory.use_in_context !== false &&
       memory.archived !== true &&
-      isMemoryActive(memory.expires_at),
+      !isSensitive(memory.content) &&
+      (!options.userId || memory.user_id === options.userId) &&
+      isMemoryActive(memory.expires_at) &&
+      (options.projectId
+        ? !memory.project_id || memory.project_id === options.projectId
+        : !memory.project_id),
   );
   if (eligibleMemories.length === 0) return [];
-
-  const pinned = eligibleMemories.filter((m) => m.pinned);
 
   // Compute query embedding once.
   let queryVec: number[] | null = null;
@@ -72,7 +77,6 @@ export async function retrieveMemories(
   }
 
   const scored = eligibleMemories
-    .filter((m) => !m.pinned)
     .map((m) => {
       let similarity: number;
       if (queryVec && m.embedding && m.embedding.length === queryVec.length) {
@@ -80,29 +84,29 @@ export async function retrieveMemories(
       } else {
         similarity = keywordOverlap(query, m.content);
       }
-      return { memory: m, similarity };
+      const ageDays = Math.max(0, (Date.now() - Date.parse(m.updated_at)) / 86_400_000);
+      const recency = Number.isFinite(ageDays) ? 1 / (1 + ageDays / 90) : 0;
+      return {
+        memory: m,
+        similarity: similarity * 0.85 + recency * 0.05,
+        rawSimilarity: similarity,
+      };
     })
-    .filter((r) => r.similarity >= minSimilarity);
+    .filter((r) => r.rawSimilarity >= minSimilarity);
 
-  scored.sort((a, b) => b.similarity - a.similarity);
+  scored.sort(
+    (a, b) => Number(b.memory.pinned) - Number(a.memory.pinned) || b.similarity - a.similarity,
+  );
 
   // Build the result within token budget: pinned first, then most relevant.
   const result: RetrievedMemory[] = [];
   let used = 0;
 
-  for (const p of pinned) {
-    const cost = estimateTokens(p.content) + 8;
-    if (used + cost <= tokenBudget || result.length === 0) {
-      result.push({ memory: p, similarity: 1 });
-      used += cost;
-    }
-  }
-
   for (const r of scored) {
     if (result.length >= limit) break;
     const cost = estimateTokens(r.memory.content) + 8;
-    if (used + cost > tokenBudget && result.length > 0) break;
-    result.push(r);
+    if (used + cost > tokenBudget) continue;
+    result.push({ memory: r.memory, similarity: r.rawSimilarity });
     used += cost;
   }
 

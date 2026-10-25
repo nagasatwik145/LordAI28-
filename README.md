@@ -138,13 +138,21 @@ Here is your task summary...
 
 ## 🧠 Memory System
 
-LORD is being designed to remember:
+LORD's memory system supports saving:
 
 - Preferences
 - Goals
 - Projects
 - Facts
 - Notes
+
+Saved memories are managed in the authenticated Memory settings page. Users can pause
+personalization without deleting saved records, exclude individual memories, correct or delete
+records, and clear the active memory store. Chat retrieval is relevance- and project-scoped; global
+memories can be used in a project, but project-specific memories are not used outside that project.
+Memories sourced from chat are distinguished from user-added records, and memory text is treated as untrusted reference
+data rather than instructions. Clearing LORD's active records does not delete source conversations
+or guarantee immediate removal from provider backups.
 
 Example:
 
@@ -337,6 +345,16 @@ Variables** for each environment that should support web search, then redeploy. 
 a `VITE_` prefix. Search requests support Tavily's `basic` and `advanced` depths and 1–20
 results; the chat defaults to basic depth and five results. The API account's quotas and
 limits apply, and quota exhaustion is surfaced so LORD never implies a failed search worked.
+Freshness-sensitive questions (for example, asking for current or latest information, news,
+prices, or sources) also trigger bounded research automatically; ordinary questions keep the
+normal fast chat path. Search results are not treated as verified pages: LORD retrieves up to
+five result pages through the server's SSRF-safe text fetcher, labels inaccessible pages and
+snippet-only results, and cites only page content it could retrieve. Successful search results
+are cached in server memory for five minutes. Automatically triggered research falls back to
+an answer that states the verification limitation if Tavily is unavailable; manually enabled
+Sources requests report a retryable error instead. Chat shows the research outcome and exposes
+a retry action when live search returns no results, pages are unavailable, or research otherwise
+could not be completed.
 
 ---
 
@@ -398,16 +416,25 @@ Made with ❤️ and caffeine.
 
 # LORD Pro billing setup
 
-LORD Pro prices default to ₹99 monthly and ₹990 yearly. Billing is deliberately
-test-mode only: server routes reject non-test Razorpay key IDs. Apply
-`supabase/migrations/20261022000000_lord_pro_billing.sql`, create matching
-monthly and yearly subscription plans in the Razorpay test dashboard, configure
-the `RAZORPAY_*` server variables from `.env.example`, and register
-`/api/billing/webhook` with the same webhook secret. Subscribe to
+LORD Pro prices default to ₹99 monthly and ₹990 yearly. Razorpay subscriptions
+remain test-mode only: configure matching monthly and yearly plans and the
+`RAZORPAY_*` server variables from `.env.example`. Register
+`/api/billing/webhook` with the webhook secret and subscribe to
 `subscription.charged`, `subscription.cancelled`, `subscription.halted`, and
-`subscription.completed`; entitlements activate or renew only from a verified
-webhook. Hosted checkout signatures are checked by `/api/billing/verify`, while
-the webhook supplies the authoritative subscription period end.
+`subscription.completed`. Razorpay entitlements activate or renew only from a
+verified webhook. Its hosted checkout can offer UPI apps such as Google Pay when
+UPI is enabled for the merchant account.
+
+PhonePe is also available as a separate sandbox, one-time checkout. Apply
+`supabase/migrations/20261025020000_phonepe_one_time_payments.sql` after the
+existing Pro billing migration, configure `PHONEPE_CLIENT_ID`,
+`PHONEPE_CLIENT_SECRET`, `PHONEPE_CLIENT_VERSION`, and the public HTTPS
+`APP_BASE_URL`, and keep `PHONEPE_ENV=sandbox`. The customer is returned to the
+upgrade page, which verifies payment status server-to-server before granting
+one month or one year of Pro access. PhonePe payments do not renew
+automatically; Razorpay remains the recurring subscription option. Production
+PhonePe payments are intentionally disabled until a production integration is
+explicitly configured and reviewed.
 
 Set `LORD_LIFETIME_PRO_USERS` to comma-separated `auth.users` UUID and email
 pairs for the three designated accounts. Confirm each immutable UUID in the

@@ -12,10 +12,16 @@ export async function buildMemoryPrompt(
   try {
     const { data: settings, error: settingsError } = await supabase
       .from("memory_settings")
-      .select("memory_enabled")
+      .select("memory_enabled,personalization_enabled")
       .eq("user_id", userId)
       .maybeSingle();
-    if (settingsError || !isMemoryEnabled(settings)) return "";
+    if (
+      settingsError ||
+      !isMemoryEnabled(settings) ||
+      settings?.personalization_enabled === false
+    ) {
+      return "";
+    }
 
     const opts: BrainContextOptions = {
       userId,

@@ -55,8 +55,6 @@ let serverEntryPromise: Promise<ServerEntry> | undefined;
 // verbatim in the auth header and rejected as invalid credentials.
 const envReport = reloadServerEnv();
 
-const isProd = process.env.NODE_ENV === "production";
-
 console.info(
   JSON.stringify({
     event: "server_env_loaded",
@@ -69,14 +67,11 @@ console.info(
       before: { exists: change.before.exists },
       after: { exists: change.after.exists },
     })),
-    providerKeys: isProd
-      ? envReport.providerKeys.map((k) => ({ name: k.name, exists: k.exists }))
-      : envReport.providerKeys.map((k) => ({
-          name: k.name,
-          exists: k.exists,
-          first8: k.first8,
-          length: k.length,
-        })),
+    providerKeys: envReport.providerKeys.map((key) => ({
+      name: key.name,
+      exists: key.exists,
+      length: key.length,
+    })),
   }),
 );
 for (const warning of envReport.warnings) {

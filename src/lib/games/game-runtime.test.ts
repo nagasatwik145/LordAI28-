@@ -39,7 +39,7 @@ describe("genre-specific deterministic game runtime", () => {
       const html = createGameHtml(spec);
       const renderer = renderers[index];
       expect(getRendererName(spec)).toBe(spec.gameType);
-      expect(html).toContain(`ENGINE=\"${spec.gameType}\"`);
+      expect(html).toContain(`ENGINE="${spec.gameType}"`);
       if (spec.gameType === "runner") expect(html).toContain("default:tickRunner(dt)");
       else expect(html).toContain(`case'${spec.gameType}':`);
       expect(html).toContain(`function ${renderer}`);

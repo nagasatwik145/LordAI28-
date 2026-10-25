@@ -8,6 +8,9 @@ describe("app navigation", () => {
     expect(APP_NAVIGATION.find(({ label }) => label === "Tasks & Notifications")?.to).toBe(
       "/tasks",
     );
+    expect(APP_NAVIGATION.find(({ label }) => label === "Health Center")?.to).toBe(
+      "/observability",
+    );
   });
 
   it("keeps four primary destinations and exposes every other destination as secondary", () => {

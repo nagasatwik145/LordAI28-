@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, GitCompareArrows, Loader2, Save, Sparkles } from "lucide-react";
+import { Copy, Download, GitCompareArrows, Loader2, RefreshCw, Save, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { requestWhatIf } from "@/lib/what-if/api-client";
 import {
   analyzeScenario,
   WhatIfScenarioSchema,
@@ -47,29 +48,6 @@ const GenerateResponseSchema = z.object({
   modelContentType: z.literal("qualitative-hypothesis"),
 });
 
-async function apiRequest<T>(schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
-  const response = await fetch("/api/what-if", {
-    credentials: "same-origin",
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  const body: unknown = await response.json();
-  if (!response.ok) {
-    const message =
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof body.error === "object" &&
-      body.error !== null &&
-      "message" in body.error &&
-      typeof body.error.message === "string"
-        ? body.error.message
-        : "What-If Lab request failed.";
-    throw new Error(message);
-  }
-  return schema.parse(body);
-}
-
 function listValue(value: string): string[] {
   return value
     .split("\n")
@@ -81,7 +59,8 @@ function WhatIfPage() {
   const queryClient = useQueryClient();
   const savedQuery = useQuery({
     queryKey: ["what-if-scenarios"],
-    queryFn: () => apiRequest(SavedListSchema),
+    queryFn: () => requestWhatIf(SavedListSchema),
+    retry: false,
   });
   const [objective, setObjective] = useState("");
   const [constraints, setConstraints] = useState("");
@@ -103,7 +82,7 @@ function WhatIfPage() {
   const generate = async () => {
     setBusy("generate");
     try {
-      const result = await apiRequest(GenerateResponseSchema, {
+      const result = await requestWhatIf(GenerateResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           action: "generate",
@@ -139,7 +118,7 @@ function WhatIfPage() {
     }
     setBusy("save");
     try {
-      const result = await apiRequest(SaveResponseSchema, {
+      const result = await requestWhatIf(SaveResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           action: "save",
@@ -173,7 +152,7 @@ function WhatIfPage() {
   const duplicate = async (row: SavedScenario) => {
     setBusy(row.id);
     try {
-      const result = await apiRequest(SaveResponseSchema, {
+      const result = await requestWhatIf(SaveResponseSchema, {
         method: "POST",
         body: JSON.stringify({ action: "duplicate", scenarioId: row.id }),
       });
@@ -416,6 +395,7 @@ function WhatIfPage() {
               rows={savedQuery.data?.scenarios ?? []}
               loading={savedQuery.isLoading}
               error={savedQuery.error}
+              retrying={savedQuery.isFetching}
               selectedIds={selectedRevisions}
               busy={busy}
               onLoad={loadScenario}
@@ -429,6 +409,7 @@ function WhatIfPage() {
                       : current,
                 )
               }
+              onRetry={() => void savedQuery.refetch()}
             />
             {compareRows.length > 0 && (
               <section className="space-y-3">
@@ -660,20 +641,24 @@ function SavedScenarios({
   rows,
   loading,
   error,
+  retrying,
   selectedIds,
   busy,
   onLoad,
   onDuplicate,
   onSelect,
+  onRetry,
 }: {
   rows: SavedScenario[];
   loading: boolean;
   error: Error | null;
+  retrying: boolean;
   selectedIds: string[];
   busy: string | null;
   onLoad: (row: SavedScenario) => void;
   onDuplicate: (row: SavedScenario) => void;
   onSelect: (id: string) => void;
+  onRetry: () => void;
 }) {
   return (
     <Card className="border-border/70 bg-card/80">
@@ -687,9 +672,15 @@ function SavedScenarios({
         </p>
         {loading && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
         {error && (
-          <p className="text-sm text-destructive">
-            Could not load saved scenarios: {error.message}
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-destructive">
+              Could not load saved scenarios: {error.message}
+            </p>
+            <Button variant="outline" size="sm" onClick={onRetry} disabled={retrying}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
+              {retrying ? "Retrying…" : "Retry"}
+            </Button>
+          </div>
         )}
         {!loading && !error && rows.length === 0 && (
           <p className="text-sm text-muted-foreground">No saved scenarios yet.</p>

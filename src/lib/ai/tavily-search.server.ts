@@ -1,9 +1,13 @@
 import "@tanstack/react-start/server-only";
 import { readEnvApiKey } from "../env.server";
-import type { WebSource } from "./web-sources";
+import { extractPageText, normalizeSafeSourceUrl, type WebSource } from "./web-sources";
 
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
 const MAX_CONTENT_CHARS = 1_200;
+const MAX_PAGE_CONTENT_CHARS = 5_000;
+const MAX_PAGES_TO_RETRIEVE = 5;
+const WEB_SEARCH_CACHE_TTL_MS = 5 * 60_000;
+const WEB_SEARCH_CACHE_MAX_ENTRIES = 500;
 export const MAX_WEB_QUERY_LENGTH = 500;
 export const MAX_WEB_RESULTS = 20;
 export type TavilySearchDepth = "basic" | "advanced";
@@ -11,6 +15,19 @@ export type TavilySearchDepth = "basic" | "advanced";
 const WEB_SEARCH_WINDOW_MS = 60_000;
 const WEB_SEARCH_MAX_PER_USER = 10;
 const webSearchRequests = new Map<string, number[]>();
+const webSearchCache = new Map<string, { expiresAt: number; sources: WebSource[] }>();
+
+interface PageFetchResponse {
+  ok: boolean;
+  status: number;
+  headers: Headers;
+  text: string;
+}
+
+type PageFetcher = (
+  url: string,
+  options?: { signal?: AbortSignal; maxBytes?: number },
+) => Promise<PageFetchResponse>;
 
 export function readTavilyApiKey(
   readKey: () => string | undefined = () => readEnvApiKey("TAVILY_API_KEY"),
@@ -52,7 +69,11 @@ export async function searchWebSources(
   query: string,
   apiKey: string,
   signal?: AbortSignal,
-  options: { searchDepth?: TavilySearchDepth; maxResults?: number } = {},
+  options: {
+    searchDepth?: TavilySearchDepth;
+    maxResults?: number;
+    pageFetcher?: PageFetcher;
+  } = {},
 ): Promise<WebSource[]> {
   const normalizedQuery = query.trim();
   if (!normalizedQuery || normalizedQuery.length > MAX_WEB_QUERY_LENGTH) {
@@ -62,8 +83,16 @@ export async function searchWebSources(
     );
   }
 
-  const maxResults = Math.min(MAX_WEB_RESULTS, Math.max(1, Math.floor(options.maxResults ?? 5)));
+  const requestedMaxResults = options.maxResults ?? 5;
+  const maxResults = Number.isFinite(requestedMaxResults)
+    ? Math.min(MAX_WEB_RESULTS, Math.max(1, Math.floor(requestedMaxResults)))
+    : 5;
   const searchDepth = options.searchDepth ?? "basic";
+  const cacheKey = `${normalizedQuery.toLowerCase()}\n${searchDepth}\n${maxResults}`;
+  const cached = webSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now())
+    return cached.sources.map((source) => ({ ...source }));
+  if (cached) webSearchCache.delete(cacheKey);
   const response = await fetch(TAVILY_SEARCH_URL, {
     method: "POST",
     headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
@@ -91,7 +120,7 @@ export async function searchWebSources(
   const results =
     payload && typeof payload === "object" ? (payload as { results?: unknown }).results : null;
   if (!Array.isArray(results)) return [];
-  return results
+  const sources = results
     .flatMap((item): WebSource[] => {
       if (!item || typeof item !== "object") return [];
       const result = item as Record<string, unknown>;
@@ -99,10 +128,10 @@ export async function searchWebSources(
         typeof result.title === "string" && result.title.trim()
           ? result.title.slice(0, 240)
           : "Source";
-      const url = safeHttpUrl(result.url);
+      const url = normalizeSafeSourceUrl(result.url);
       const content =
         typeof result.content === "string" ? result.content.slice(0, MAX_CONTENT_CHARS) : "";
-      if (!url || !content) return [];
+      if (!url) return [];
       const domain = new URL(url).hostname.replace(/^www\./, "");
       return [
         {
@@ -116,18 +145,60 @@ export async function searchWebSources(
           ...(typeof result.published_date === "string"
             ? { publishedDate: result.published_date.slice(0, 40) }
             : {}),
+          verification: "snippet",
         },
       ];
     })
     .slice(0, maxResults);
+  const retrieved = await retrieveSourcePages(sources, signal, options.pageFetcher);
+  webSearchCache.set(cacheKey, {
+    expiresAt: Date.now() + WEB_SEARCH_CACHE_TTL_MS,
+    sources: retrieved,
+  });
+  if (webSearchCache.size > WEB_SEARCH_CACHE_MAX_ENTRIES) {
+    const now = Date.now();
+    for (const [key, entry] of webSearchCache) {
+      if (entry.expiresAt <= now || webSearchCache.size > WEB_SEARCH_CACHE_MAX_ENTRIES) {
+        webSearchCache.delete(key);
+      }
+    }
+  }
+  return retrieved.map((source) => ({ ...source }));
 }
 
-function safeHttpUrl(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
+async function retrieveSourcePages(
+  sources: WebSource[],
+  signal?: AbortSignal,
+  pageFetcher?: PageFetcher,
+): Promise<WebSource[]> {
+  if (!sources.length) return sources;
+  const fetchPage =
+    pageFetcher ??
+    (async (url: string, options?: { signal?: AbortSignal; maxBytes?: number }) => {
+      const { safeFetchText } = await import("../safe-fetch.server");
+      return safeFetchText(url, options);
+    });
+  return Promise.all(
+    sources.map(async (source, index) => {
+      if (index >= MAX_PAGES_TO_RETRIEVE) return source;
+      try {
+        const page = await fetchPage(source.url, {
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(7_000)])
+            : AbortSignal.timeout(7_000),
+          maxBytes: 750_000,
+        });
+        const contentType = page.headers.get("content-type")?.toLowerCase() ?? "";
+        if (!page.ok || !/(?:text\/html|application\/xhtml\+xml|text\/plain)/.test(contentType)) {
+          return { ...source, verification: "unavailable" };
+        }
+        const content = extractPageText(page.text).slice(0, MAX_PAGE_CONTENT_CHARS);
+        if (content.length < 40) return { ...source, verification: "unavailable" };
+        return { ...source, content, verification: "page" };
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return { ...source, verification: "unavailable" };
+      }
+    }),
+  );
 }

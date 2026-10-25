@@ -4,10 +4,20 @@ import type { Json } from "@/integrations/supabase/types";
 import {
   ALL_MISSION_ACTIONS,
   MissionActionSchema,
+  type MissionEvent,
   type MissionPlan,
   type MissionStatus,
   validateMissionPlan,
 } from "./mission-engine";
+const MissionEventSchema = z
+  .object({
+    id: z.string().uuid(),
+    type: z.string().min(1).max(60),
+    timestamp: z.string().datetime(),
+    message: z.string().min(1).max(500),
+    stepId: z.string().max(40).optional(),
+  })
+  .strict();
 const MissionStatusSchema = z.enum([
   "planning",
   "needs_clarification",
@@ -42,6 +52,10 @@ const MissionPlanSchema = z
             requiresApproval: z.boolean(),
             status: z.enum(["pending", "running", "retrying", "completed", "failed", "skipped"]),
             attempts: z.number().int(),
+            startedAt: z.string().datetime().optional(),
+            lastAttemptAt: z.string().datetime().optional(),
+            retryAt: z.string().datetime().optional(),
+            completedAt: z.string().datetime().optional(),
             result: z
               .object({
                 content: z.string().max(20_000).optional(),
@@ -67,6 +81,9 @@ export interface MissionRecord {
   status: MissionStatus;
   plan: MissionPlan;
   result: Json | null;
+  events: MissionEvent[];
+  idempotencyKey: string | null;
+  approvedScopeHash: string | null;
   executionLeaseUntil: string | null;
   revision: number;
   createdAt: string;
@@ -80,6 +97,9 @@ type MissionRow = {
   status: string;
   plan: Json;
   result: Json | null;
+  events: Json;
+  idempotency_key: string | null;
+  approved_scope_hash: string | null;
   execution_lease_until: string | null;
   revision: number;
   created_at: string;
@@ -110,12 +130,15 @@ export class MissionPersistenceError extends Error {
 
 export interface MissionStore {
   get(id: string, userId: string): Promise<MissionRecord | null>;
+  getByIdempotencyKey(userId: string, idempotencyKey: string): Promise<MissionRecord | null>;
   list(userId: string, limit?: number): Promise<MissionRecord[]>;
   create(input: {
     userId: string;
     objective: string;
     status: MissionStatus;
     plan: MissionPlan;
+    idempotencyKey?: string;
+    events?: MissionEvent[];
   }): Promise<MissionRecord>;
   compareAndSwap(record: MissionRecord, expectedRevision: number): Promise<MissionRecord | null>;
 }
@@ -125,6 +148,7 @@ function toMissionRecord(row: MissionRow): MissionRecord {
     throw new MissionPersistenceError("Saved mission metadata is invalid.");
   }
   const plan = MissionPlanSchema.parse(row.plan);
+  const events = z.array(MissionEventSchema).max(100).parse(row.events);
   if (!(
     (row.status === "planning" || row.status === "failed") &&
     plan.steps.length === 0 &&
@@ -139,6 +163,9 @@ function toMissionRecord(row: MissionRow): MissionRecord {
     status: row.status as MissionStatus,
     plan,
     result: row.result,
+    events,
+    idempotencyKey: row.idempotency_key,
+    approvedScopeHash: row.approved_scope_hash,
     executionLeaseUntil: row.execution_lease_until,
     revision: row.revision,
     createdAt: row.created_at,
@@ -147,7 +174,7 @@ function toMissionRecord(row: MissionRow): MissionRecord {
 }
 
 const COLUMNS =
-  "id,user_id,objective,status,plan,result,execution_lease_until,revision,created_at,updated_at";
+  "id,user_id,objective,status,plan,result,events,idempotency_key,approved_scope_hash,execution_lease_until,revision,created_at,updated_at";
 
 export function createMissionStore(db: MissionDatabase): MissionStore {
   return {
@@ -159,6 +186,17 @@ export function createMissionStore(db: MissionDatabase): MissionStore {
         .eq("user_id", userId)
         .maybeSingle();
       if (error) throw new MissionPersistenceError("Mission could not be loaded.");
+      return data ? toMissionRecord(data) : null;
+    },
+
+    async getByIdempotencyKey(userId, idempotencyKey) {
+      const { data, error } = await db
+        .from("autopilot_missions")
+        .select(COLUMNS)
+        .eq("user_id", userId)
+        .eq("idempotency_key", idempotencyKey)
+        .maybeSingle();
+      if (error) throw new MissionPersistenceError("Mission request could not be loaded.");
       return data ? toMissionRecord(data) : null;
     },
 
@@ -182,12 +220,26 @@ export function createMissionStore(db: MissionDatabase): MissionStore {
           status: input.status,
           plan: input.plan as unknown as Json,
           result: null,
+          events: (input.events ?? []) as unknown as Json,
+          idempotency_key: input.idempotencyKey ?? null,
+          approved_scope_hash: null,
           execution_lease_until: null,
           revision: 0,
         })
         .select(COLUMNS)
         .single();
-      if (error || !data) throw new MissionPersistenceError("Mission could not be saved.");
+      if (error || !data) {
+        if (input.idempotencyKey) {
+          const lookup = await db
+            .from("autopilot_missions")
+            .select(COLUMNS)
+            .eq("user_id", input.userId)
+            .eq("idempotency_key", input.idempotencyKey)
+            .maybeSingle();
+          if (!lookup.error && lookup.data) return toMissionRecord(lookup.data);
+        }
+        throw new MissionPersistenceError("Mission could not be saved.");
+      }
       return toMissionRecord(data);
     },
 
@@ -198,6 +250,8 @@ export function createMissionStore(db: MissionDatabase): MissionStore {
           status: record.status,
           plan: record.plan as unknown as Json,
           result: record.result,
+          events: record.events as unknown as Json,
+          approved_scope_hash: record.approvedScopeHash,
           execution_lease_until: record.executionLeaseUntil,
           revision: expectedRevision + 1,
         })

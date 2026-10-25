@@ -7,6 +7,7 @@ import {
   Loader2,
   Network,
   Pin,
+  RefreshCw,
   Search,
   ShieldCheck,
   ShieldOff,
@@ -40,6 +41,7 @@ import { MEMORY_CATEGORIES, MEMORY_CATEGORY_LABELS } from "@/lib/memory/types";
 import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { invalidateBrainContextCache } from "@/lib/brain/context-cache";
+import { getSafeErrorMessage } from "@/lib/api-error";
 
 export const Route = createFileRoute("/_authenticated/mind-graph")({
   head: () => ({
@@ -130,6 +132,7 @@ function MindGraphPage() {
 
   const projectsQuery = useQuery({
     queryKey: ["mind-graph", "projects", user.id],
+    retry: false,
     queryFn: async (): Promise<MindGraphProject[]> => {
       const { data, error } = await supabase
         .from("projects")
@@ -145,6 +148,7 @@ function MindGraphPage() {
 
   const memoriesQuery = useQuery({
     queryKey: ["mind-graph", "memories", user.id, projectId, showArchived, memoryPage],
+    retry: false,
     queryFn: async (): Promise<{ records: MemoryRecord[]; total: number }> => {
       let query = supabase
         .from("memories")
@@ -167,6 +171,7 @@ function MindGraphPage() {
 
   const tasksQuery = useQuery({
     queryKey: ["mind-graph", "tasks", user.id, projectId],
+    retry: false,
     queryFn: async (): Promise<MindGraphTask[]> => {
       let query = supabase
         .from("project_tasks")
@@ -183,6 +188,7 @@ function MindGraphPage() {
 
   const conversationsQuery = useQuery({
     queryKey: ["mind-graph", "conversations", user.id, projectId],
+    retry: false,
     queryFn: async (): Promise<MindGraphConversation[]> => {
       let query = supabase
         .from("conversations")
@@ -201,6 +207,7 @@ function MindGraphPage() {
 
   const filesQuery = useQuery({
     queryKey: ["mind-graph", "files", user.id, projectId],
+    retry: false,
     queryFn: async (): Promise<MindGraphFile[]> => {
       let query = supabase
         .from("knowledge_sources")
@@ -290,13 +297,12 @@ function MindGraphPage() {
   };
 
   const updateMemoryField = async (
-    patch: Parameters<typeof updateMemory.mutateAsync>[0],
+    patch: Omit<Parameters<typeof updateMemory.mutateAsync>[0], "id">,
     successMessage: string,
   ) => {
     if (!selectedMemory) return;
     try {
-      const { id: _ignoredId, ...rest } = patch as typeof patch & { id?: string };
-      await updateMemory.mutateAsync({ ...rest, id: selectedMemory.id });
+      await updateMemory.mutateAsync({ ...patch, id: selectedMemory.id });
       await queryClient.invalidateQueries({ queryKey: ["mind-graph", "memories", user.id] });
       invalidateBrainContextCache(user.id);
       toast.success(successMessage);
@@ -399,6 +405,21 @@ function MindGraphPage() {
     tasksQuery.isLoading ||
     conversationsQuery.isLoading ||
     filesQuery.isLoading;
+  const isRetrying =
+    projectsQuery.isFetching ||
+    memoriesQuery.isFetching ||
+    tasksQuery.isFetching ||
+    conversationsQuery.isFetching ||
+    filesQuery.isFetching;
+  const retryGraph = async () => {
+    await Promise.all([
+      projectsQuery.refetch(),
+      memoriesQuery.refetch(),
+      tasksQuery.refetch(),
+      conversationsQuery.refetch(),
+      filesQuery.refetch(),
+    ]);
+  };
 
   return (
     <AppShell>
@@ -545,9 +566,17 @@ function MindGraphPage() {
                   </span>
                 </div>
               ) : graphError ? (
-                <div className="grid min-h-[22rem] place-items-center p-6 text-sm text-destructive">
-                  Couldn’t load the Mind Graph:{" "}
-                  {graphError instanceof Error ? graphError.message : "A database request failed."}
+                <div className="grid min-h-[22rem] place-items-center gap-3 p-6 text-sm text-destructive">
+                  <p>Couldn’t load the Mind Graph: {getSafeErrorMessage(graphError)}</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => void retryGraph()}
+                    disabled={isRetrying}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isRetrying ? "animate-spin" : ""}`} />
+                    {isRetrying ? "Retrying…" : "Retry"}
+                  </Button>
                 </div>
               ) : filteredNodes.length === 0 ? (
                 <div className="grid min-h-[22rem] place-items-center p-6 text-center">

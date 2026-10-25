@@ -4,30 +4,79 @@ import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middlew
 import { upgradeLegacyGameSpec, validateGameSpec, type GeneratedGameSpec, type GameSpec, type StoredGameSpec } from "@/lib/games/game-runtime";
 import {
   createGameRecord,
+  filterGamesForEntitlement,
   GameServiceError,
   ownedGamesQuery,
+  requiresGameProAccess,
   scopeGameToOwner,
-  hasThreeDimensionalGameSpec,
-  isThreeDimensionalGameSpec,
   updateGameGeneration,
 } from "@/lib/games/game-service";
 import { GameRequestSchema } from "@/lib/games/game-request-schema";
 import { generationFailure, upstreamStatus } from "@/lib/games/game-errors";
 import { generateGameSpec } from "@/lib/games/game-generation.server";
 import { hasProEntitlement } from "@/lib/billing/entitlements.server";
+import { recordProductEvent } from "@/lib/analytics.server";
 
 const DEFAULT_GAME_MODEL = "minimax/minimax-m3.1-flash:free";
+const proRequiredResponse = () =>
+  Response.json(
+    {
+      error: {
+        code: "PRO_REQUIRED",
+        message: "LORD Pro is required to create, modify, save, or open 3D games.",
+      },
+    },
+    { status: 403 },
+  );
+
+function databaseErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object" || !("code" in error)) return null;
+  const code = Reflect.get(error, "code");
+  return typeof code === "string" ? code : null;
+}
 
 export const Route = createFileRoute("/api/games")({
   server: {
     middleware: [requireSupabaseRequestAuth],
     handlers: {
       POST: async ({ request, context }) => {
-        const { userId, supabase, claims } = context as { userId: string; supabase: unknown; claims: { email?: string; email_confirmed_at?: string | null } };
+        const { userId, supabase, claims } = context as {
+          userId: string;
+          supabase: unknown;
+          claims?: { email?: string; email_confirmed_at?: string | null };
+        };
         const db = supabase as any;
         let action = "unknown";
         let gameId: string | undefined;
         const requestId = crypto.randomUUID();
+        let proAccess: boolean | undefined;
+        const checkPro = async (): Promise<boolean | Response> => {
+          if (proAccess !== undefined) return proAccess;
+          try {
+            proAccess = await hasProEntitlement({ id: userId, ...claims });
+            return proAccess;
+          } catch (error) {
+            console.error("[games] entitlement verification failed", {
+              requestId,
+              action,
+              errorName: error instanceof Error ? error.name : "unknown",
+            });
+            return Response.json(
+              {
+                error: {
+                  code: "PRO_CHECK_UNAVAILABLE",
+                  message: "Game access could not be verified. Please retry.",
+                },
+              },
+              { status: 503 },
+            );
+          }
+        };
+        const requirePro = async (): Promise<Response | null> => {
+          const access = await checkPro();
+          if (access instanceof Response) return access;
+          return access ? null : proRequiredResponse();
+        };
         try {
           let body: unknown;
           try {
@@ -46,15 +95,11 @@ export const Route = createFileRoute("/api/games")({
             );
           const op = input.data;
           action = op.action;
-          const gameSpec = "spec" in op ? op.spec : null;
-          const nestedSpecs = op.action === "save" ? op.versions ?? [] : [];
-          const requests3d = (op.action === "generate" && op.dimension === "3d") ||
-            isThreeDimensionalGameSpec(gameSpec) ||
-            hasThreeDimensionalGameSpec(nestedSpecs);
-          if (requests3d && !(await hasProEntitlement({ id: userId, ...claims }))) {
-            return Response.json({ error: { code: "PRO_REQUIRED", message: "LORD Pro is required for 3D games." } }, { status: 403 });
-          }
           if (op.action === "generate") {
+            if (op.dimension === "3d") {
+              const denied = await requirePro();
+              if (denied) return denied;
+            }
             const game = await createGameRecord(db, {
               userId,
               prompt: op.prompt,
@@ -64,14 +109,9 @@ export const Route = createFileRoute("/api/games")({
             let spec: GeneratedGameSpec;
             try {
               spec = await generateGameSpec(op.prompt, op.difficulty, undefined, undefined, op.dimension, request.signal);
-              if (isThreeDimensionalGameSpec(spec)) {
-                if (!(await hasProEntitlement({ id: userId, ...claims }))) {
-                  await updateGameGeneration(db, userId, game.id, { status: "failed" });
-                  return Response.json({ error: { code: "PRO_REQUIRED", message: "LORD Pro is required for 3D games." } }, { status: 403 });
-                }
-              }
             } catch (error) {
               const failure = generationFailure(error);
+              await recordProductEvent(userId, { event: "game_generation_failed", feature: "games", category: "provider" }).catch(() => undefined);
               console.error("[games] upstream generation failed", {
                 requestId,
                 gameId,
@@ -87,10 +127,26 @@ export const Route = createFileRoute("/api/games")({
               }
               throw failure;
             }
+            if (requiresGameProAccess({ spec })) {
+              const denied = await requirePro();
+              if (denied) {
+                try {
+                  await updateGameGeneration(db, userId, game.id, { status: "failed" });
+                } catch (error) {
+                  console.error("[games] could not mark disallowed game generation as failed", {
+                    requestId,
+                    gameId,
+                    errorName: error instanceof Error ? error.name : "unknown",
+                  });
+                }
+                return denied;
+              }
+            }
             const readyGame = await updateGameGeneration(db, userId, game.id, {
               status: "ready",
               spec,
             });
+            await recordProductEvent(userId, { event: "game_generation_succeeded", feature: "games" }).catch(() => undefined);
             return Response.json({ game: readyGame });
           }
           if (op.action === "modify") {
@@ -99,9 +155,14 @@ export const Route = createFileRoute("/api/games")({
             const existing = op.spec.schemaVersion === 1
               ? upgradeLegacyGameSpec(op.spec)
               : op.spec as GeneratedGameSpec;
+            if (requiresGameProAccess({ spec: existing })) {
+              const denied = await requirePro();
+              if (denied) return denied;
+            }
             const spec = await generateGameSpec("", existing.difficulty, existing, op.instruction, undefined, request.signal);
-            if (isThreeDimensionalGameSpec(spec) && !(await hasProEntitlement({ id: userId, ...claims }))) {
-              return Response.json({ error: { code: "PRO_REQUIRED", message: "LORD Pro is required for 3D games." } }, { status: 403 });
+            if (requiresGameProAccess({ spec })) {
+              const denied = await requirePro();
+              if (denied) return denied;
             }
             return Response.json({
               spec,
@@ -113,8 +174,13 @@ export const Route = createFileRoute("/api/games")({
               .order("updated_at", { ascending: false })
               .limit(50);
             if (error) throw error;
-            const pro = await hasProEntitlement({ id: userId, ...claims });
-            return Response.json({ games: pro ? data ?? [] : (data ?? []).filter((game: { spec?: { dimension?: string; schemaVersion?: number } }) => game.spec?.dimension !== "3d" && game.spec?.schemaVersion !== 3) });
+            const games = data ?? [];
+            if (games.some((game: { spec: unknown; versions: unknown[] }) => requiresGameProAccess(game))) {
+              const access = await checkPro();
+              if (access instanceof Response) return access;
+              return Response.json({ games: filterGamesForEntitlement(games, access) });
+            }
+            return Response.json({ games });
           }
           if (op.action === "get") {
             const { data, error } = await ownedGamesQuery(db, userId)
@@ -123,8 +189,9 @@ export const Route = createFileRoute("/api/games")({
               .maybeSingle();
             if (error) throw error;
             if (!data) return Response.json({ error: "Game not found." }, { status: 404 });
-            if (isThreeDimensionalGameSpec(data.spec)) {
-              if (!(await hasProEntitlement({ id: userId, ...claims }))) return Response.json({ error: { code: "PRO_REQUIRED", message: "LORD Pro is required to access 3D games." } }, { status: 403 });
+            if (requiresGameProAccess(data)) {
+              const denied = await requirePro();
+              if (denied) return denied;
             }
             return Response.json({ game: data });
           }
@@ -142,6 +209,10 @@ export const Route = createFileRoute("/api/games")({
             return Response.json({ error: "Invalid game specification." }, { status: 400 });
           if (op.versions?.some((version) => !validateGameSpec(version)))
             return Response.json({ error: "Invalid game version history." }, { status: 400 });
+          if (requiresGameProAccess({ spec: op.spec, versions: op.versions })) {
+            const denied = await requirePro();
+            if (denied) return denied;
+          }
           const payload = {
             user_id: userId,
             spec: op.spec as StoredGameSpec,
@@ -163,6 +234,9 @@ export const Route = createFileRoute("/api/games")({
               requestId,
               action,
               failureType: error.kind,
+              ...(error.kind === "database"
+                ? { databaseErrorCode: databaseErrorCode(error.cause) }
+                : {}),
             });
             const statusByKind = {
               auth: 401,
@@ -201,6 +275,7 @@ export const Route = createFileRoute("/api/games")({
             failureType: classifiedFailure?.kind ?? "database_or_request",
             upstreamStatus: upstreamStatus(error) ?? null,
             errorName: error instanceof Error ? error.name : "unknown",
+            ...(isGenerationAction ? {} : { databaseErrorCode: databaseErrorCode(error) }),
           });
           return Response.json(
             {

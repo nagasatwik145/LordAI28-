@@ -3,7 +3,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { hasProEntitlement } from "@/lib/billing/entitlements.server";
 import { apiErrorResponse } from "@/lib/api-error";
 import {
   executeVoiceMissionStep,
@@ -183,14 +182,6 @@ export const Route = createFileRoute("/api/voice/missions")({
           claims: { email?: string; email_confirmed_at?: string | null };
         };
         try {
-          if (!(await hasProEntitlement({ id: auth.userId, ...auth.claims }))) {
-            return apiErrorResponse(
-              403,
-              "PRO_REQUIRED",
-              "LORD Pro is required for voice mission controls.",
-              requestId,
-            );
-          }
           const missionId = new URL(request.url).searchParams.get("id");
           if (missionId) {
             if (!z.string().uuid().safeParse(missionId).success) {
@@ -235,14 +226,6 @@ export const Route = createFileRoute("/api/voice/missions")({
           return apiErrorResponse(400, "INVALID_REQUEST", "Invalid mission request.", requestId);
         }
         try {
-          if (!(await hasProEntitlement({ id: auth.userId, ...auth.claims }))) {
-            return apiErrorResponse(
-              403,
-              "PRO_REQUIRED",
-              "LORD Pro is required for voice mission controls.",
-              requestId,
-            );
-          }
           if (parsed.data.action === "plan") {
             const plan = await planVoiceMission(
               parsed.data.goal,

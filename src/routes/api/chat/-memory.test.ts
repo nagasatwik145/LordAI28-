@@ -10,9 +10,13 @@ vi.mock("@/lib/brain/context", () => ({
 
 import { buildMemoryPrompt } from "./-memory";
 
-function makeClient(memoryEnabled: boolean, error: { message: string } | null = null) {
+function makeClient(
+  memoryEnabled: boolean,
+  personalizationEnabled = true,
+  error: { message: string } | null = null,
+) {
   const maybeSingle = vi.fn().mockResolvedValue({
-    data: { memory_enabled: memoryEnabled },
+    data: { memory_enabled: memoryEnabled, personalization_enabled: personalizationEnabled },
     error,
   });
   const eq = vi.fn(() => ({ maybeSingle }));
@@ -39,10 +43,24 @@ describe("chat memory prompt", () => {
   });
 
   it("fails closed when memory settings cannot be read", async () => {
-    const { client } = makeClient(true, { message: "settings unavailable" });
+    const { client } = makeClient(true, true, { message: "settings unavailable" });
 
     await expect(buildMemoryPrompt(client, "user-1", "continue auth")).resolves.toBe("");
     expect(brain.buildBrainContext).not.toHaveBeenCalled();
+  });
+
+  it("does not retrieve memory when personalization is paused", async () => {
+    const { client } = makeClient(true, false);
+
+    await expect(buildMemoryPrompt(client, "user-1", "continue auth")).resolves.toBe("");
+    expect(brain.buildBrainContext).not.toHaveBeenCalled();
+  });
+
+  it("fails closed with an empty deterministic context when retrieval fails", async () => {
+    brain.buildBrainContext.mockRejectedValue(new Error("memory provider unavailable"));
+    const { client } = makeClient(true);
+
+    await expect(buildMemoryPrompt(client, "user-1", "continue auth")).resolves.toBe("");
   });
 
   it("uses the authenticated client to retrieve relevant context", async () => {

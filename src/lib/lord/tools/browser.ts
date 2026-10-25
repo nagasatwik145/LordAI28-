@@ -9,6 +9,7 @@
 import { registerTool } from "../registry";
 import { ok, fail } from "../permissions";
 import { runLordText } from "../llm";
+import { safeFetchText } from "@/lib/safe-fetch.server";
 import type { ToolContext, ToolResult } from "../types";
 
 function stripHtml(html: string): string {
@@ -30,12 +31,9 @@ async function fetchText(
   url: string,
   signal: AbortSignal,
 ): Promise<{ text: string; title: string }> {
-  const res = await fetch(url, {
-    signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
-    headers: { "User-Agent": "LordAI-CommandCenter/1.0 (+https://lordai.app)" },
-  });
+  const res = await safeFetchText(url, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const html = await res.text();
+  const html = res.text;
   const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
   const title = titleMatch?.[1]?.trim() ?? url;
   const text = stripHtml(html).slice(0, 8000);
@@ -56,7 +54,12 @@ export function registerBrowserTools(): void {
       if (!/^https?:\/\//i.test(url))
         return fail("Only http(s) URLs are allowed.", { errorCode: "BAD_URL" });
       try {
-        ctx.log({ level: "info", source: "browser", message: `Opening ${url}` });
+        const target = new URL(url);
+        ctx.log({
+          level: "info",
+          source: "browser",
+          message: `Opening ${target.hostname}${target.pathname}`,
+        });
         const { text, title } = await fetchText(url, ctx.signal);
         return ok(`Opened "${title}".`, { url, title, text });
       } catch (err) {
@@ -122,7 +125,12 @@ export function registerBrowserTools(): void {
       if (!/^https?:\/\//i.test(url))
         return fail("Only http(s) URLs are allowed.", { errorCode: "BAD_URL" });
       try {
-        ctx.log({ level: "info", source: "browser", message: `Summarizing ${url}` });
+        const target = new URL(url);
+        ctx.log({
+          level: "info",
+          source: "browser",
+          message: `Summarizing ${target.hostname}${target.pathname}`,
+        });
         const { text, title } = await fetchText(url, ctx.signal);
         const { text: summary } = await runLordText({
           system: "You summarize web pages clearly and concisely for Lord's user.",

@@ -1,17 +1,9 @@
 # LORD AI voice assistant
 
-The authenticated `/voice` route provides tap-to-talk and an opt-in “Hey, LORD” wake phrase. The dashboard quick action and primary navigation open this route. The microphone is requested only after the user enables voice, and recognition is stopped when voice is muted, the route is left, or the tab becomes hidden.
+The authenticated `/voice` route provides tap-to-talk and an opt-in “Hey, LORD” phrase using the browser or Android WebView `SpeechRecognition` API. The wake engine and tap-to-talk recognizer share the existing `VoicePipeline`; transcripts use the existing authenticated `/api/chat` endpoint and saved conversation behavior. The dashboard quick action and primary navigation open this route.
 
-## Speech recognition and privacy
+Microphone permission is requested only after the user activates voice. Voice mode stops when the route is left or the page/app is backgrounded. Browser recognition can be interrupted and is not a guaranteed continuous or background wake-word engine. The implementation does not include a native Android microphone foreground service or acoustic wake model. On unsupported browsers, after permission denial, or during recognition/network errors, typed chat remains available.
 
-The implementation uses the browser's `SpeechRecognition` or `webkitSpeechRecognition` API. It does not use an acoustic wake-word model, upload raw recordings to LORD's chat API, or listen outside this open, active page. Browser support and recognition reliability vary; browser implementations may use a browser-vendor speech service. When recognition is missing or interrupted, the page explains the limitation and retains the text command field as a fallback. Continuous wake listening stops after repeated browser interruptions and requires the user to retry.
+Recognized text is sent to LORD; raw audio is not saved by LORD or sent to its chat API. The browser or Android speech service may process audio remotely under its own behavior and privacy terms. Spoken replies use browser speech synthesis, can be interrupted, and are independently controlled from subtitles.
 
-Speech-to-text yields transcript text, which is sent to the existing authenticated `/api/chat` endpoint. Voice messages are saved to the existing `conversations` and `messages` tables under the signed-in user's account. Spoken responses use browser speech synthesis and follow the user's saved spoken-replies preference. Subtitles and spoken replies are independently controlled.
-
-## Configuration and deployment
-
-No new environment variables or provider keys are required. The feature uses the app's existing Supabase authentication, database policies, API configuration, and chat provider configuration.
-
-For local development, run `npm install` and `npm run dev`, sign in, then open **Voice Assistant** from the dashboard or visit `/voice`. A production deployment uses the repository's existing Vercel project and environment configuration: run the checks below, then deploy through the existing Vercel workflow (or `vercel --prod` if that is the project's configured process). This change does not deploy automatically.
-
-The voice assistant requires a secure context (HTTPS, or localhost for development), a signed-in user for chat persistence, and a browser exposing both microphone access and Web Speech recognition for voice input. Text commands remain available without speech recognition.
+For Android permissions and lifecycle limits, see [WAKE_WORD.md](./WAKE_WORD.md). Physical-device verification is required for WebView microphone prompts, headset routing, audio focus, and speech-service behavior on target Android versions.

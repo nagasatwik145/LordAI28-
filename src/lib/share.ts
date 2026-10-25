@@ -16,6 +16,10 @@ export interface ShareRecord {
   is_public: boolean;
 }
 
+export function isShareToken(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 /** Build the absolute public share URL for a token (works on web + native). */
 export function getShareUrl(shareToken: string): string {
   const base =

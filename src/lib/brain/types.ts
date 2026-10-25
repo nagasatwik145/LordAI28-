@@ -34,6 +34,7 @@ export interface MemoryContextItem {
   id: string;
   content: string;
   category: string;
+  source: "auto" | "manual" | "imported";
   importance: number;
   similarity: number;
   pinned: boolean;

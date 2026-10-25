@@ -21,8 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import type { Json } from "@/integrations/supabase/types";
 import {
-  missionProgress,
   type MissionAction,
+  type MissionEvent,
   type MissionPlan,
   type MissionStatus,
 } from "@/lib/autopilot/mission-engine";
@@ -34,6 +34,7 @@ interface MissionView {
   objective: string;
   status: MissionStatus;
   plan: MissionPlan;
+  events: MissionEvent[];
   result: Json | null;
   revision: number;
   executionLeaseUntil: string | null;
@@ -47,7 +48,13 @@ interface MissionListResponse {
 }
 
 async function missionRequest<T>(
-  input: { action: string; missionId?: string; objective?: string; answers?: string } | null,
+  input: {
+    action: string;
+    missionId?: string;
+    objective?: string;
+    answers?: string;
+    requestId?: string;
+  } | null,
   missionId?: string,
 ): Promise<T> {
   const url = new URL("/api/missions", window.location.origin);
@@ -96,6 +103,7 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
   const [executionPending, setExecutionPending] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
   const runLock = useRef(false);
+  const planRequestId = useRef<string | null>(null);
 
   const acceptMission = useCallback((next: MissionView) => {
     setMission(next);
@@ -189,6 +197,11 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
         current = response.mission;
         acceptMission(current);
         if (current.status !== "planned") break;
+        const retryAt = current.plan.steps.find((step) => step.status === "retrying")?.retryAt;
+        const retryDelay = retryAt ? Date.parse(retryAt) - Date.now() : 0;
+        if (retryDelay > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, Math.min(retryDelay, 30_000)));
+        }
         await new Promise((resolve) => window.setTimeout(resolve, 250));
       }
     } catch (error) {
@@ -204,13 +217,17 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
     setLoading(true);
     setNotice("");
     setResultsVisible(false);
+    const requestId = planRequestId.current ?? crypto.randomUUID();
+    planRequestId.current = requestId;
     try {
       const response = await missionRequest<{ mission: MissionView }>({
         action: "plan",
         objective,
+        requestId,
       });
       acceptMission(response.mission);
       setObjective("");
+      planRequestId.current = null;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Mission planning failed.");
     } finally {
@@ -372,22 +389,50 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                   </div>
 
                   <section className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
-                    <div className="mb-2 flex items-center justify-between text-xs">
-                      <span className="font-medium text-white/75">Mission progress</span>
-                      <span className="text-cyan-100">{missionProgress(mission.plan.steps)}%</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                      <motion.div
-                        className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-300"
-                        initial={false}
-                        animate={{ width: `${missionProgress(mission.plan.steps)}%` }}
-                        transition={{ duration: 0.35 }}
-                      />
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-white/75">Persisted progress</span>
+                      <span className="text-cyan-100">
+                        {mission.plan.steps.filter((step) => step.status === "completed").length} of{" "}
+                        {mission.plan.steps.length} steps complete
+                      </span>
                     </div>
                     <p className="mt-3 text-xs leading-relaxed text-white/55">
                       {mission.plan.summary}
                     </p>
                   </section>
+
+                  {mission.status === "needs_approval" && (
+                    <section className="rounded-xl border border-amber-200/20 bg-amber-200/[0.04] p-4">
+                      <h3 className="text-sm font-medium text-amber-100">
+                        Review the requested action
+                      </h3>
+                      <p className="mt-1 text-xs text-white/55">
+                        Approval applies only to the exact action and arguments shown below. A
+                        changed plan requires a new approval.
+                      </p>
+                      <ul className="mt-3 space-y-3">
+                        {mission.plan.steps
+                          .filter((step) => step.requiresApproval)
+                          .map((step) => (
+                            <li key={step.id} className="rounded-lg border border-white/10 p-3">
+                              <p className="text-xs font-medium text-white">{step.description}</p>
+                              <p className="mt-1 text-[10px] text-white/45">Tool: {step.action}</p>
+                              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words text-[10px] text-white/60">
+                                {JSON.stringify(step.arguments, null, 2)}
+                              </pre>
+                            </li>
+                          ))}
+                      </ul>
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => void sendAction("approve")}
+                        className="mt-3 rounded-lg bg-cyan-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
+                      >
+                        Approve reviewed action
+                      </button>
+                    </section>
+                  )}
 
                   {mission.status === "needs_clarification" && (
                     <section className="rounded-xl border border-amber-200/20 bg-amber-200/[0.04] p-4">
@@ -423,25 +468,36 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                     </section>
                   )}
 
-                  {mission.status === "needs_approval" && (
-                    <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/20 bg-amber-200/[0.04] p-4">
-                      <div>
-                        <h3 className="text-sm font-medium text-amber-100">Approval required</h3>
-                        <p className="mt-1 text-xs text-white/55">
-                          This plan creates a game in your library. Review the steps before
-                          approving.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={loading}
-                        onClick={() => void sendAction("approve")}
-                        className="rounded-lg bg-cyan-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
-                      >
-                        Approve plan
-                      </button>
-                    </section>
-                  )}
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-white/45">
+                      Current action and recent events
+                    </h3>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                      <p className="text-xs text-white/75">
+                        {mission.plan.steps.find((step) => step.status === "running")
+                          ?.description ??
+                          (mission.status === "running"
+                            ? "Preparing the next eligible step."
+                            : "No action is currently running.")}
+                      </p>
+                      <ol className="mt-3 space-y-2 border-l border-white/10 pl-3">
+                        {mission.events
+                          .slice(-8)
+                          .reverse()
+                          .map((event) => (
+                            <li
+                              key={event.id}
+                              className="text-[10px] leading-relaxed text-white/50"
+                            >
+                              <time dateTime={event.timestamp}>
+                                {new Date(event.timestamp).toLocaleString()}
+                              </time>
+                              <span className="ml-2 text-white/75">{event.message}</span>
+                            </li>
+                          ))}
+                      </ol>
+                    </div>
+                  </section>
 
                   <section className="space-y-3">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-white/45">
@@ -499,6 +555,16 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                                 {step.result.error}
                               </p>
                             )}
+                            {(step.startedAt || step.completedAt || step.retryAt) && (
+                              <p className="mt-2 text-[10px] text-white/40">
+                                {step.startedAt &&
+                                  `Started ${new Date(step.startedAt).toLocaleString()}`}
+                                {step.completedAt &&
+                                  ` · Finished ${new Date(step.completedAt).toLocaleString()}`}
+                                {step.retryAt &&
+                                  ` · Retry available ${new Date(step.retryAt).toLocaleString()}`}
+                              </p>
+                            )}
                             {(() => {
                               const resultData = step.result?.data;
                               const gameId =
@@ -536,12 +602,25 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                     >
                       <h3 className="text-sm font-medium text-cyan-100">Mission results</h3>
                       <p className="mt-2 text-xs leading-relaxed text-white/70">
-                        {mission.plan.summary}
+                        {mission.status === "completed"
+                          ? mission.plan.summary
+                          : "The mission ended with unresolved work. Review failed and skipped steps above."}
                       </p>
                       <p className="mt-2 text-[10px] text-white/40">
                         {mission.plan.steps.filter((step) => step.status === "completed").length} of{" "}
                         {mission.plan.steps.length} steps validated as complete.
                       </p>
+                      {mission.plan.steps.some(
+                        (step) => step.status === "failed" || step.status === "skipped",
+                      ) && (
+                        <p className="mt-2 text-xs text-amber-100/75">
+                          Unresolved work:{" "}
+                          {mission.plan.steps
+                            .filter((step) => step.status === "failed" || step.status === "skipped")
+                            .map((step) => step.description)
+                            .join("; ")}
+                        </p>
+                      )}
                     </section>
                   )}
 
@@ -611,7 +690,7 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                           {resultsVisible ? "Hide results" : "View results"}
                         </button>
                       )}
-                    {isActive(mission.status) && mission.status !== "planning" && (
+                    {isActive(mission.status) && (
                       <button
                         type="button"
                         disabled={loading}
@@ -648,7 +727,10 @@ export function MissionWorkspace({ isPro }: { isPro: boolean }) {
                   </div>
                   <textarea
                     value={objective}
-                    onChange={(event) => setObjective(event.target.value)}
+                    onChange={(event) => {
+                      planRequestId.current = null;
+                      setObjective(event.target.value);
+                    }}
                     maxLength={2_000}
                     rows={5}
                     aria-label="Mission objective"

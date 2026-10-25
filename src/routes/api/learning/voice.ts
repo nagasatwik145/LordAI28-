@@ -3,7 +3,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
 import { apiErrorResponse } from "@/lib/api-error";
-import { hasProEntitlement } from "@/lib/billing/entitlements.server";
 
 const VoiceRequestSchema = z.discriminatedUnion("action", [
   z.object({
@@ -60,13 +59,6 @@ export const Route = createFileRoute("/api/learning/voice")({
 
         const db = auth.supabase;
         const userId = auth.userId;
-        if (!(await hasProEntitlement({ id: userId, ...(auth.claims ?? {}) })))
-          return apiErrorResponse(
-            403,
-            "PRO_REQUIRED",
-            "LORD Pro is required for voice features.",
-            requestId,
-          );
 
         try {
           if (parsed.data.action === "stt") {

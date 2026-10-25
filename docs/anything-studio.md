@@ -18,7 +18,7 @@ Deliverables are validated before being marked complete. Code and test-case file
 2. Configure the existing server-side LORD text-model routing for specification and text deliverable generation. Model availability depends on the existing LORD/OpenRouter server configuration.
 3. Configure the existing LORD image provider for image assets. Anything Studio uses the selected model and storage setup already configured for the Images feature; it does not add a separate image provider.
 4. The game export uses LORD's existing compatible game runtime and bundles its Three.js runtime for supported 3D games. It does not package a native Android application.
-5. Mind Graph receives new projects through the shared `projects` table. The current application tree does not include an Autopilot page or mission API, so Anything Studio does not show an Autopilot action. That integration can be enabled after the Autopilot route and its database migrations are available.
+5. Mind Graph receives new projects through the shared `projects` table. LORD Autopilot is a separate authenticated mission workspace in chat; it runs only its registered server-side tools and does not currently create or deploy Anything Studio projects.
 
 ## File isolation
 

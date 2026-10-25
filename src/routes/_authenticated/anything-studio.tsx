@@ -25,6 +25,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
+import { loadStudioJson } from "@/lib/anything-studio-client";
 import {
   buildSandboxedWebsitePreview,
   STUDIO_DELIVERABLES,
@@ -112,22 +113,6 @@ async function requestJson<T>(body: unknown, schema: z.ZodType<T>): Promise<T> {
   return parsed.data;
 }
 
-async function loadJson<T>(url: string, schema: z.ZodType<T>): Promise<T> {
-  const response = await authenticatedFetch(url);
-  const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const error = z
-      .object({ error: z.object({ message: z.string().optional() }).optional() })
-      .safeParse(payload);
-    throw new Error(
-      (error.success ? error.data.error?.message : undefined) ?? "Could not load Anything Studio.",
-    );
-  }
-  const parsed = schema.safeParse(payload);
-  if (!parsed.success) throw new Error("LORD returned invalid Studio data.");
-  return parsed.data;
-}
-
 function validationOf(value: unknown): StudioValidation {
   const parsed = z
     .object({
@@ -194,7 +179,7 @@ export const Route = createFileRoute("/_authenticated/anything-studio")({
 
 function AnythingStudioPage() {
   const search = Route.useSearch();
-  const navigate = useNavigate({ from: "/_authenticated/anything-studio" });
+  const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const projectId = search.projectId ?? "";
   const [name, setName] = useState("");
@@ -214,13 +199,19 @@ function AnythingStudioPage() {
 
   const projectListQuery = useQuery({
     queryKey: ["anything-studio", "projects"],
-    queryFn: () => loadJson("/api/anything-studio", StudioListSchema),
+    queryFn: ({ signal }) => loadStudioJson("/api/anything-studio", StudioListSchema, signal),
+    retry: false,
   });
   const bundleQuery = useQuery({
     queryKey: ["anything-studio", projectId],
     enabled: !!projectId,
-    queryFn: () =>
-      loadJson(`/api/anything-studio?projectId=${encodeURIComponent(projectId)}`, BundleSchema),
+    queryFn: ({ signal }) =>
+      loadStudioJson(
+        `/api/anything-studio?projectId=${encodeURIComponent(projectId)}`,
+        BundleSchema,
+        signal,
+      ),
+    retry: false,
   });
   const createMutation = useMutation({
     mutationFn: () =>
@@ -418,8 +409,8 @@ function AnythingStudioPage() {
               One spec. Related outputs.
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Describe a project, review its shared specification, then generate and revise only
-              the deliverables you need.
+              Describe a project, review its shared specification, then generate and revise only the
+              deliverables you need.
             </p>
           </div>
           <div className="flex gap-2">
@@ -517,7 +508,20 @@ function AnythingStudioPage() {
               {projectListQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground">Loading projects…</p>
               ) : projectListQuery.isError ? (
-                <p className="text-sm text-destructive">{projectListQuery.error.message}</p>
+                <div className="space-y-2">
+                  <p className="text-sm text-destructive">{projectListQuery.error.message}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void projectListQuery.refetch()}
+                    disabled={projectListQuery.isFetching}
+                  >
+                    <RefreshCw
+                      className={`mr-2 h-4 w-4 ${projectListQuery.isFetching ? "animate-spin" : ""}`}
+                    />
+                    {projectListQuery.isFetching ? "Retrying…" : "Retry"}
+                  </Button>
+                </div>
               ) : projects.length ? (
                 <div className="space-y-2">
                   {projects.map((item: StudioListItem) => (
@@ -554,7 +558,21 @@ function AnythingStudioPage() {
                 <LoaderCircle className="h-6 w-6 animate-spin text-primary" />
               </Card>
             ) : bundleQuery.isError ? (
-              <Card className="p-6 text-sm text-destructive">{bundleQuery.error.message}</Card>
+              <Card className="space-y-3 p-6 text-sm text-destructive">
+                <p>{bundleQuery.error.message}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void bundleQuery.refetch()}
+                  disabled={bundleQuery.isFetching}
+                  className="text-foreground"
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${bundleQuery.isFetching ? "animate-spin" : ""}`}
+                  />
+                  {bundleQuery.isFetching ? "Retrying…" : "Retry"}
+                </Button>
+              </Card>
             ) : bundle ? (
               <>
                 <Card className="space-y-5 p-5">

@@ -15,9 +15,16 @@ import {
   MissionServiceError,
 } from "@/lib/autopilot/mission-service.server";
 import { createMissionStore, type MissionDatabase } from "@/lib/autopilot/mission-store.server";
+import { recordProductEvent } from "@/lib/analytics.server";
 
 const MissionRequestSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("plan"), objective: z.string().trim().min(1).max(2_000) }).strict(),
+  z
+    .object({
+      action: z.literal("plan"),
+      objective: z.string().trim().min(1).max(2_000),
+      requestId: z.string().uuid(),
+    })
+    .strict(),
   z
     .object({
       action: z.literal("clarify"),
@@ -41,11 +48,13 @@ function json(data: unknown, status = 200) {
 }
 
 function getIdentity(userId: string, claims: unknown) {
-  const claimRecord = claims && typeof claims === "object" ? (claims as Record<string, unknown>) : {};
+  const claimRecord =
+    claims && typeof claims === "object" ? (claims as Record<string, unknown>) : {};
   return {
     id: userId,
     ...(typeof claimRecord.email === "string" ? { email: claimRecord.email } : {}),
-    ...(typeof claimRecord.email_confirmed_at === "string" || claimRecord.email_confirmed_at === null
+    ...(typeof claimRecord.email_confirmed_at === "string" ||
+    claimRecord.email_confirmed_at === null
       ? { email_confirmed_at: claimRecord.email_confirmed_at }
       : {}),
   };
@@ -63,13 +72,21 @@ function errorResponse(error: unknown) {
       rate_limited: 429,
       tool: 502,
     } as const;
-    return json({ error: { code: error.kind.toUpperCase(), message: error.message } }, statuses[error.kind]);
+    return json(
+      { error: { code: error.kind.toUpperCase(), message: error.message } },
+      statuses[error.kind],
+    );
   }
   console.error("[autopilot] mission request failed", {
     errorName: error instanceof Error ? error.name : "unknown",
   });
   return json(
-    { error: { code: "MISSION_REQUEST_FAILED", message: "The mission request could not be completed." } },
+    {
+      error: {
+        code: "MISSION_REQUEST_FAILED",
+        message: "The mission request could not be completed.",
+      },
+    },
     500,
   );
 }
@@ -87,7 +104,12 @@ export const Route = createFileRoute("/api/missions")({
           const identity = getIdentity(auth.userId, auth.claims);
           if (!(await hasProEntitlement(identity))) {
             return json(
-              { error: { code: "PRO_REQUIRED", message: "LORD Autopilot requires a LORD Pro subscription." } },
+              {
+                error: {
+                  code: "PRO_REQUIRED",
+                  message: "LORD Autopilot requires a LORD Pro subscription.",
+                },
+              },
               403,
             );
           }
@@ -119,26 +141,43 @@ export const Route = createFileRoute("/api/missions")({
         try {
           const contentLength = Number(request.headers.get("content-length") ?? 0);
           if (contentLength > 20_000) {
-            return json({ error: { code: "INVALID_REQUEST", message: "Mission requests are too large." } }, 413);
+            return json(
+              { error: { code: "INVALID_REQUEST", message: "Mission requests are too large." } },
+              413,
+            );
           }
           let payload: unknown;
           try {
             const body = await request.text();
             if (body.length > 20_000) {
-              return json({ error: { code: "INVALID_REQUEST", message: "Mission requests are too large." } }, 413);
+              return json(
+                { error: { code: "INVALID_REQUEST", message: "Mission requests are too large." } },
+                413,
+              );
             }
             payload = JSON.parse(body);
           } catch {
-            return json({ error: { code: "INVALID_REQUEST", message: "Request body must be valid JSON." } }, 400);
+            return json(
+              { error: { code: "INVALID_REQUEST", message: "Request body must be valid JSON." } },
+              400,
+            );
           }
           const input = MissionRequestSchema.safeParse(payload);
           if (!input.success) {
-            return json({ error: { code: "INVALID_REQUEST", message: "Invalid mission request." } }, 400);
+            return json(
+              { error: { code: "INVALID_REQUEST", message: "Invalid mission request." } },
+              400,
+            );
           }
           const identity = getIdentity(auth.userId, auth.claims);
           if (!(await hasProEntitlement(identity))) {
             return json(
-              { error: { code: "PRO_REQUIRED", message: "LORD Autopilot requires a LORD Pro subscription." } },
+              {
+                error: {
+                  code: "PRO_REQUIRED",
+                  message: "LORD Autopilot requires a LORD Pro subscription.",
+                },
+              },
               403,
             );
           }
@@ -147,22 +186,42 @@ export const Route = createFileRoute("/api/missions")({
           const operation = input.data;
 
           if (operation.action === "plan") {
+            const duplicate = await store.getByIdempotencyKey(auth.userId, operation.requestId);
+            if (duplicate && duplicate.objective !== operation.objective) {
+              throw new MissionServiceError(
+                "conflict",
+                "This request ID was already used for a different mission goal.",
+              );
+            }
+            if (duplicate && duplicate.status !== "planning") return json({ mission: duplicate });
             if (!checkMissionPlanningRateLimit(auth.userId)) {
-              throw new MissionServiceError("rate_limited", "Mission planning is limited to five requests per hour.");
+              throw new MissionServiceError(
+                "rate_limited",
+                "Mission planning is limited to five requests per hour.",
+              );
             }
             const recentMissions = await store.list(auth.userId, 20);
             const activeMissions = recentMissions.filter((mission) =>
-              ["planning", "needs_clarification", "needs_approval", "planned", "running", "paused"].includes(
-                mission.status,
-              ),
+              [
+                "planning",
+                "needs_clarification",
+                "needs_approval",
+                "planned",
+                "running",
+                "paused",
+              ].includes(mission.status),
             ).length;
             if (activeMissions >= 3) {
-              throw new MissionServiceError("rate_limited", "Finish or cancel an active mission before creating another.");
+              throw new MissionServiceError(
+                "rate_limited",
+                "Finish or cancel an active mission before creating another.",
+              );
             }
             const mission = await createMissionPlan(store, {
               userId: auth.userId,
               identity,
               objective: operation.objective,
+              idempotencyKey: operation.requestId,
               signal: request.signal,
             });
             return json({ mission }, 201);
@@ -182,16 +241,27 @@ export const Route = createFileRoute("/api/missions")({
           if (operation.action === "approve") {
             return json({ mission: await approveMission(store, auth.userId, operation.missionId) });
           }
-          if (operation.action === "pause" || operation.action === "cancel" || operation.action === "resume" || operation.action === "retry") {
-            const mission = await controlMission(store, auth.userId, operation.missionId, operation.action);
+          if (
+            operation.action === "pause" ||
+            operation.action === "cancel" ||
+            operation.action === "resume" ||
+            operation.action === "retry"
+          ) {
+            const mission = await controlMission(
+              store,
+              auth.userId,
+              operation.missionId,
+              operation.action,
+            );
             if (operation.action === "pause" || operation.action === "cancel") {
               abortLocalMission(auth.userId, operation.missionId);
             }
             return json({ mission });
           }
-          return json({
-            mission: await executeMissionStep(store, auth.userId, operation.missionId, identity),
-          });
+          const mission = await executeMissionStep(store, auth.userId, operation.missionId, identity);
+          if (mission.status === "completed") await recordProductEvent(auth.userId, { event: "mission_completed", feature: "missions" }).catch(() => undefined);
+          if (mission.status === "failed") await recordProductEvent(auth.userId, { event: "mission_failed", feature: "missions", category: "provider" }).catch(() => undefined);
+          return json({ mission });
         } catch (error) {
           return errorResponse(error);
         }

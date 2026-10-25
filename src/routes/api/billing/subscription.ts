@@ -2,12 +2,19 @@ import { createFileRoute } from "@tanstack/react-router";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { razorpayCredentials } from "@/lib/billing/razorpay.server";
+import { LORD_PRO_ENABLED } from "@/lib/billing/entitlements.server";
+import { recordProductEvent } from "@/lib/analytics.server";
 
 export const Route = createFileRoute("/api/billing/subscription")({
   server: {
     middleware: [requireSupabaseRequestAuth],
     handlers: {
       POST: async ({ request, context }) => {
+        if (!LORD_PRO_ENABLED)
+          return Response.json(
+            { error: "LORD Pro subscriptions are temporarily unavailable." },
+            { status: 503 },
+          );
         const auth = context as {
           userId: string;
           claims: { email?: string; email_confirmed_at?: string | null };
@@ -18,6 +25,27 @@ export const Route = createFileRoute("/api/billing/subscription")({
         if (body?.plan !== "monthly" && body?.plan !== "yearly")
           return Response.json({ error: "Choose a valid plan." }, { status: 400 });
         try {
+          const { data: pendingPhonePeOrder, error: pendingPhonePeError } = await supabaseAdmin
+            .from("phonepe_orders")
+            .select("merchant_order_id,created_at")
+            .eq("user_id", auth.userId)
+            .eq("status", "pending")
+            .maybeSingle();
+          if (pendingPhonePeError) throw pendingPhonePeError;
+          if (pendingPhonePeOrder) {
+            if (Date.parse(pendingPhonePeOrder.created_at) > Date.now() - 20 * 60 * 1000)
+              return Response.json(
+                { error: "A PhonePe checkout is already pending for this account." },
+                { status: 409 },
+              );
+            const { error: expireError } = await supabaseAdmin
+              .from("phonepe_orders")
+              .update({ status: "failed" })
+              .eq("merchant_order_id", pendingPhonePeOrder.merchant_order_id)
+              .eq("status", "pending");
+            if (expireError) throw expireError;
+          }
+
           const { keyId, keySecret } = razorpayCredentials();
           const planId =
             body.plan === "monthly"
@@ -64,6 +92,7 @@ export const Route = createFileRoute("/api/billing/subscription")({
             body: JSON.stringify({
               plan_id: planId,
               total_count: body.plan === "monthly" ? 120 : 10,
+              expire_by: Math.floor(Date.now() / 1000) + 20 * 60,
               quantity: 1,
               customer_notify: 1,
               notes: { lord_user_id: auth.userId, plan: body.plan },
@@ -92,6 +121,10 @@ export const Route = createFileRoute("/api/billing/subscription")({
             { onConflict: "user_id" },
           );
           if (error) throw error;
+          await recordProductEvent(auth.userId, {
+            event: "subscription_checkout_initiated",
+            feature: "other",
+          }).catch(() => undefined);
           return Response.json({
             subscriptionId: subscription.id,
             keyId,

@@ -30,6 +30,12 @@ export async function requestGamesApi<T = Record<string, unknown>>(body: object)
   if (details?.code === "DB_ERROR") {
     throw new Error("The game could not be saved. Check your connection and try again.");
   }
+  if (details?.code === "PRO_REQUIRED") {
+    throw new Error(serverMessage || "LORD Pro is required to use 3D games.");
+  }
+  if (details?.code === "PRO_CHECK_UNAVAILABLE") {
+    throw new Error(serverMessage || "Game access could not be verified. Please retry.");
+  }
   if (details?.code === "AI_NOT_CONFIGURED") {
     throw new Error("Game generation is temporarily unavailable. Please try again later.");
   }

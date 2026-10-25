@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { hmacSha256Hex, safeEqual } from "@/lib/billing/razorpay.server";
+import { recordProductEvent } from "@/lib/analytics.server";
 
 export const Route = createFileRoute("/api/billing/webhook")({
   server: {
@@ -46,12 +47,25 @@ export const Route = createFileRoute("/api/billing/webhook")({
             { onConflict: "razorpay_payment_id" },
           );
           if (billingError) throw billingError;
+          const { data: previousEntitlement, error: entitlementLookupError } = await supabaseAdmin
+            .from("pro_entitlements")
+            .select("status")
+            .eq("user_id", userId)
+            .eq("razorpay_subscription_id", subscription.id)
+            .maybeSingle();
+          if (entitlementLookupError) throw entitlementLookupError;
           const { error } = await supabaseAdmin
             .from("pro_entitlements")
             .update({ status: "active", expires_at: endsAt, updated_at: new Date().toISOString() })
             .eq("user_id", userId)
             .eq("razorpay_subscription_id", subscription.id);
           if (error) throw error;
+          if (previousEntitlement?.status === "inactive")
+            await recordProductEvent(userId, {
+              event: "subscription_checkout_confirmed",
+              feature: "other",
+              dedupeKey: `razorpay:${payment.id}`,
+            }).catch(() => undefined);
         } else if (
           ["subscription.halted", "subscription.cancelled", "subscription.completed"].includes(
             event.event ?? "",

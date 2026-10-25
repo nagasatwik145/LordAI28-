@@ -94,11 +94,37 @@ describe("streamChat", () => {
       undefined,
       ["free-model:free"],
       "00000000-0000-4000-8000-000000000004",
-      [{ title: "Reference", url: "https://example.com/source", content: "Evidence" }],
+      [
+        {
+          title: "Reference",
+          url: "https://example.com/source",
+          content: "Evidence",
+          verification: "page",
+        },
+      ],
+      1400,
+      undefined,
+      { status: "complete", sourceCount: 1, verifiedPageCount: 1 },
     );
     const body = await response.text();
     expect(body).toContain("The current fact is supported [S1].");
-    expect(body).toContain("[Reference](https://example.com/source)");
+    expect(body).toContain("[Reference](<https://example.com/source>)");
+    expect(body).toContain("page accessed");
+    expect(body).toContain('"type":"data-web-research","data":{"status":"complete"');
+  });
+
+  it("keeps normal chat free of research status and source UI data", async () => {
+    mocks.streamChat.mockImplementationOnce(() => tokens("A direct answer."));
+    const response = streamChat(
+      [{ role: "user", content: "hello" }],
+      undefined,
+      ["free-model:free"],
+      "00000000-0000-4000-8000-000000000006",
+    );
+    const body = await response.text();
+    expect(body).toContain("A direct answer.");
+    expect(body).not.toContain("data-web-research");
+    expect(body).not.toContain("data-web-sources");
   });
 
   it("adds evidence-backed Reality Check results after the generated answer", async () => {

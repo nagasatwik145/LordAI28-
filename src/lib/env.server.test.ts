@@ -31,23 +31,21 @@ describe("normalizeEnvValue", () => {
 });
 
 describe("summarizeSecret", () => {
-  it("exposes only existence, the first 8 characters and the length", () => {
+  it("reports metadata without exposing any portion of the secret", () => {
     const summary = summarizeSecret("sk-proj-super-secret-value", "OPENAI_API_KEY");
     expect(summary).toEqual({
       name: "OPENAI_API_KEY",
       exists: true,
-      first8: "sk-proj-",
       length: 26,
     });
-    // The full secret must never appear anywhere in the summary.
+    expect(JSON.stringify(summary)).not.toContain("sk-proj-");
     expect(JSON.stringify(summary)).not.toContain("super-secret-value");
   });
 
-  it("reports a missing value without inventing a prefix", () => {
+  it("reports a missing value without including a secret value", () => {
     expect(summarizeSecret(undefined, "GEMINI_API_KEY")).toEqual({
       name: "GEMINI_API_KEY",
       exists: false,
-      first8: undefined,
       length: 0,
     });
   });

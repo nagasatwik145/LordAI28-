@@ -37,6 +37,14 @@ export interface MissionStepResult {
   error?: string;
 }
 
+export interface MissionEvent {
+  id: string;
+  type: string;
+  timestamp: string;
+  message: string;
+  stepId?: string;
+}
+
 const StepArgumentsSchema = {
   "chat.respond": z.object({ prompt: z.string().trim().min(1).max(4_000) }).strict(),
   "study.explain": z
@@ -73,6 +81,10 @@ export interface MissionStep {
   requiresApproval: boolean;
   status: MissionStepStatus;
   attempts: number;
+  startedAt?: string;
+  lastAttemptAt?: string;
+  retryAt?: string;
+  completedAt?: string;
   result?: MissionStepResult;
 }
 

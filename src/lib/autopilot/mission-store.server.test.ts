@@ -33,6 +33,9 @@ function createDatabaseFixture() {
       ],
     } as unknown as Json,
     result: null,
+    events: [] as unknown as Json,
+    idempotency_key: null,
+    approved_scope_hash: null,
     execution_lease_until: null,
     revision: 0,
     created_at: "2026-10-24T00:00:00.000Z",
@@ -76,7 +79,14 @@ function createDatabaseFixture() {
     },
   };
   const db: MissionDatabase = { from: () => query };
-  return { db, calls, filters };
+  return {
+    db,
+    calls,
+    filters,
+    setPlan(plan: Json) {
+      row = { ...row, plan };
+    },
+  };
 }
 
 function record(): MissionRecord {
@@ -108,6 +118,9 @@ function record(): MissionRecord {
       ],
     },
     result: null,
+    events: [],
+    idempotencyKey: null,
+    approvedScopeHash: null,
     executionLeaseUntil: null,
     revision: 0,
     createdAt: "2026-10-24T00:00:00.000Z",
@@ -127,6 +140,33 @@ describe("mission persistence", () => {
     expect(owned?.userId).toBe("owner-123");
   });
 
+  it("rejects malicious persisted tool arguments before a worker can use them", async () => {
+    const { db, setPlan } = createDatabaseFixture();
+    setPlan({
+      title: "Invalid plan",
+      summary: "This saved plan contains an unregistered argument.",
+      questions: [],
+      steps: [
+        {
+          id: "answer",
+          action: "study.explain",
+          arguments: { question: "What is a closure?", shell: "whoami" },
+          description: "Explain closures",
+          expectedResult: "A clear explanation",
+          dependencies: [],
+          timeoutMs: 30_000,
+          retryPolicy: { maxRetries: 1, recoverableOnly: true },
+          requiresApproval: false,
+          status: "pending",
+          attempts: 0,
+        },
+      ],
+    } as unknown as Json);
+    const store = createMissionStore(db);
+
+    await expect(store.get("mission-123", "owner-123")).rejects.toThrow();
+  });
+
   it("uses a revision compare-and-swap for durable progress updates", async () => {
     const { db, calls } = createDatabaseFixture();
     const store = createMissionStore(db);
@@ -139,6 +179,31 @@ describe("mission persistence", () => {
     expect(calls.find(([name]) => name === "update")?.[1]).toMatchObject({
       status: "completed",
       revision: 1,
+    });
+  });
+
+  it("persists the bounded event ledger and approval scope with the mission revision", async () => {
+    const { db, calls } = createDatabaseFixture();
+    const store = createMissionStore(db);
+    const next = record();
+    next.events = [
+      {
+        id: "db55dfbd-48cc-492f-b0d4-1927c18f2c3c",
+        type: "step_completed",
+        timestamp: "2026-10-24T00:00:00.000Z",
+        message: "Completed step: Explain closures",
+        stepId: "answer",
+      },
+    ];
+    next.approvedScopeHash = "a".repeat(64);
+
+    const saved = await store.compareAndSwap(next, 0);
+
+    expect(saved?.events).toEqual(next.events);
+    expect(saved?.approvedScopeHash).toBe(next.approvedScopeHash);
+    expect(calls.find(([name]) => name === "update")?.[1]).toMatchObject({
+      events: next.events,
+      approved_scope_hash: next.approvedScopeHash,
     });
   });
 });

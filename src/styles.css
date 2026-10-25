@@ -912,6 +912,16 @@ body::after {
   filter: saturate(0.65) hue-rotate(145deg) brightness(0.92);
 }
 
+.lord-orb-host[data-state="paused"] .lord-orb-svg {
+  filter: saturate(0.5) brightness(0.84);
+}
+
+.lord-orb-host[data-state="paused"] .orbital-spin,
+.lord-orb-host[data-state="paused"] .orb-particle,
+.lord-orb-host[data-state="paused"] .orb-core-pulse {
+  animation-play-state: paused;
+}
+
 .lord-orb-host[data-state="error"] .orbital-spin,
 .lord-orb-host[data-state="error"] .orb-particle,
 .lord-orb-host[data-state="error"] .orb-core-pulse,

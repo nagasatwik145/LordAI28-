@@ -231,11 +231,20 @@ export function DashboardView({
         totalConcepts={totalConcepts}
         masteredCount={masteredCount}
         action={
-          <ChangeClassDialog
-            userId={userId}
-            currentClass={profile?.class ?? null}
-            onSaved={refresh}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("lord:open-focus-session"))}
+              className="min-h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Start studying
+            </button>
+            <ChangeClassDialog
+              userId={userId}
+              currentClass={profile?.class ?? null}
+              onSaved={refresh}
+            />
+          </div>
         }
       />
 

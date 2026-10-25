@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { planGameSpec, GAME_PLANNER_SYSTEM } from "./game-generation";
-import { createGameRecord, updateGameGeneration } from "./game-service";
+import {
+  createGameRecord,
+  updateGameGeneration,
+  type GameDatabase,
+  type GameRecordQuery,
+  type PersistedGame,
+} from "./game-service";
 import { createGameHtml, getRendererName } from "./game-runtime";
 import type { GameSpec, GameType } from "./game-runtime";
 
@@ -115,40 +121,83 @@ describe("AI game planning contract", () => {
 });
 
 describe("Create Game generation-to-preview trace", () => {
-  it.each(prompts)("persists and dispatches %s as its generated genre", async (prompt, expectedType) => {
-    let row: Record<string, unknown> | null = null;
-    const query: any = {
-      insert(values: Record<string, unknown>) { row = { ...values, id: "trace-game-id", created_at: "now", updated_at: "now" }; return this; },
-      update(values: Record<string, unknown>) { row = { ...row, ...values, updated_at: "later" }; return this; },
-      select() { return this; },
-      eq() { return this; },
-      async single() { return { data: row, error: null }; },
-    };
-    const db = { from: () => query } as any;
-    const created = await createGameRecord(db, { userId: "trace-user", prompt });
-    await updateGameGeneration(db, "trace-user", created.id, { status: "generating" });
-    const generated = await planGameSpec({
-      prompt,
-      difficulty: "normal",
-      generate: async () => spec(expectedType),
-    });
-    const saved = await updateGameGeneration(db, "trace-user", created.id, { status: "ready", spec: generated });
-    expect(saved.spec?.schemaVersion).toBe(2);
-    const savedSpec = saved.spec as GameSpec;
-    const receivedByRenderer = savedSpec.gameType;
-    const actualRenderer = getRendererName(savedSpec);
+  it.each(prompts)(
+    "persists and dispatches %s as its generated genre",
+    async (prompt, expectedType) => {
+      let row: PersistedGame | null = null;
+      const query: GameRecordQuery = {
+        insert(values) {
+          row = {
+            ...values,
+            id: "trace-game-id",
+            prompt,
+            spec: null,
+            versions: [],
+            status: "pending",
+            created_at: "now",
+            updated_at: "now",
+          } as PersistedGame;
+          return query;
+        },
+        update(values) {
+          if (!row) throw new Error("Game record must exist before it can be updated.");
+          row = { ...row, ...values, updated_at: "later" } as PersistedGame;
+          return query;
+        },
+        select() {
+          return query;
+        },
+        eq() {
+          return query;
+        },
+        async single() {
+          return { data: row, error: null };
+        },
+        async maybeSingle() {
+          return { data: row, error: null };
+        },
+        order() {
+          return query;
+        },
+        async limit() {
+          return { data: row ? [row] : [], error: null };
+        },
+      };
+      const db: GameDatabase = { from: () => query };
+      const created = await createGameRecord(db, { userId: "trace-user", prompt });
+      await updateGameGeneration(db, "trace-user", created.id, { status: "generating" });
+      const generated = await planGameSpec({
+        prompt,
+        difficulty: "normal",
+        generate: async () => spec(expectedType),
+      });
+      const saved = await updateGameGeneration(db, "trace-user", created.id, {
+        status: "ready",
+        spec: generated,
+      });
+      expect(saved.spec?.schemaVersion).toBe(2);
+      const savedSpec = saved.spec as GameSpec;
+      const receivedByRenderer = savedSpec.gameType;
+      const actualRenderer = getRendererName(savedSpec);
 
-    expect(generated.gameType).toBe(expectedType);
-    expect(savedSpec.gameType).toBe(expectedType);
-    expect(receivedByRenderer).toBe(expectedType);
-    expect(actualRenderer).toBe(expectedType);
-    const html = createGameHtml(savedSpec);
-    expect(html).toContain(`ENGINE=\"${expectedType}\"`);
-    const rendererByType: Record<GameType, string> = {
-      runner: "tickRunner", rally: "tickRally", platformer: "tickPlatformer",
-      shooter: "tickShooter", puzzle: "drawPuzzle", adventure: "three-adventure",
-      racing: "tickRally", exploration: "three-exploration", fighting: "three-fighting",
-    };
-    expect(html).toContain(`function ${rendererByType[expectedType]}`);
-  });
+      expect(generated.gameType).toBe(expectedType);
+      expect(savedSpec.gameType).toBe(expectedType);
+      expect(receivedByRenderer).toBe(expectedType);
+      expect(actualRenderer).toBe(expectedType);
+      const html = createGameHtml(savedSpec);
+      expect(html).toContain(`ENGINE="${expectedType}"`);
+      const rendererByType: Record<GameType, string> = {
+        runner: "tickRunner",
+        rally: "tickRally",
+        platformer: "tickPlatformer",
+        shooter: "tickShooter",
+        puzzle: "drawPuzzle",
+        adventure: "three-adventure",
+        racing: "tickRally",
+        exploration: "three-exploration",
+        fighting: "three-fighting",
+      };
+      expect(html).toContain(`function ${rendererByType[expectedType]}`);
+    },
+  );
 });

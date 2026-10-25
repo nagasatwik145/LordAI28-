@@ -109,14 +109,6 @@ function VoicePage() {
   const [missionResult, setMissionResult] = useState<VoiceMission | null>(null);
   const [recentMissions, setRecentMissions] = useState<VoiceMission[]>([]);
   const initialConversationHandledRef = useRef(false);
-  const proQuery = useQuery({
-    queryKey: ["pro-entitlement"],
-    queryFn: async () => {
-      const response = await authenticatedFetch("/api/billing/status");
-      if (!response.ok) throw new Error("Could not verify your plan.");
-      return response.json() as Promise<{ pro: boolean; lifetime: boolean }>;
-    },
-  });
   const transcriptRef = useRef<HTMLDivElement>(null);
   const stayAtBottomRef = useRef(true);
   const { data: userId } = useQuery({
@@ -194,7 +186,7 @@ function VoicePage() {
         const mission = eligible[0];
         setMissionResult(mission);
         setPendingMissionAction({
-          action: command.action,
+          action: command.action === "start" ? "run" : command.action,
           missionId: mission.id,
           title: mission.title,
           heard,
@@ -291,6 +283,7 @@ function VoicePage() {
 
   const status = {
     disabled: "Ready when you are",
+    paused: "Voice mode paused",
     requesting_permission: "Requesting microphone access",
     wake_listening: "Listening for ‘Hey, LORD’",
     activated: "LORD activated",
@@ -308,37 +301,6 @@ function VoicePage() {
     setTypedCommand("");
     void submitText(command);
   };
-
-  if (!proQuery.data?.pro)
-    return (
-      <AppShell>
-        <main className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 text-center">
-          <div className="mb-5 grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-200">
-            <Mic className="h-8 w-8" />
-          </div>
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-300">
-            LORD Pro feature
-          </p>
-          <h1 className="mt-3 font-display text-3xl font-semibold">
-            Your voice, connected to LORD.
-          </h1>
-          <p className="mt-3 max-w-lg text-muted-foreground">
-            Upgrade to use hands-free voice conversations, spoken responses, and premium voice
-            controls.
-          </p>
-          {proQuery.isLoading ? (
-            <p className="mt-6 text-sm text-muted-foreground">Checking your plan…</p>
-          ) : (
-            <Link
-              to="/upgrade"
-              className="mt-7 rounded-xl bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20"
-            >
-              Explore LORD Pro
-            </Link>
-          )}
-        </main>
-      </AppShell>
-    );
 
   return (
     <AppShell>
@@ -660,13 +622,14 @@ function VoicePage() {
           >
             <p>{errorMessage}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {state === "error" && supported && (
+              {(state === "error" || state === "paused") && supported && (
                 <button
                   type="button"
                   onClick={() => void enable()}
                   className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-100/25 px-3 text-xs hover:bg-amber-100/5"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" /> Retry microphone
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  {state === "paused" ? "Resume voice" : "Retry microphone"}
                 </button>
               )}
               {messages.some((message) => message.role === "user") && (

@@ -1,10 +1,11 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeSync } from "@/lib/realtime/use-realtime-sync";
 import { createDueNotifications, useTasks } from "@/lib/task-store";
 import { onDashboardEvent } from "@/lib/dashboard-service";
 import { toast } from "sonner";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
   const { user } = Route.useRouteContext();
+  const pathname = useLocation({ select: (location) => location.pathname });
 
   // Single, app-wide realtime sync: binds the shared RealtimeManager to this
   // user and routes conversation/message events into React Query. Mounted once
@@ -30,6 +32,11 @@ function AuthenticatedLayout() {
   const { tasks, refresh } = useTasks(user?.id);
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
+
+  useEffect(() => {
+    const feature = pathname.startsWith("/study") ? "study" : pathname.startsWith("/chat") ? "chat" : pathname.startsWith("/games") ? "games" : pathname.startsWith("/voice") ? "missions" : pathname.startsWith("/images") ? "images" : "workspace";
+    void authenticatedFetch("/api/analytics/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "feature_opened", feature }) }).catch(() => undefined);
+  }, [pathname]);
 
   useEffect(() => {
     if (!user?.id) return;

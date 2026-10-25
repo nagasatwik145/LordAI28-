@@ -1,121 +1,23 @@
-# LORD AI — Wake Word ("Hey Lord") with OpenWakeWord
+# LORD AI voice and “Hey, LORD”
 
-LORD uses **[OpenWakeWord](https://github.com/dscripka/openWakeWord)** — a free, open-source wake-word engine — running entirely in the browser / Android WebView via **ONNX Runtime Web**.
+LORD's voice input uses the browser or Android WebView `SpeechRecognition` / `webkitSpeechRecognition` API through the shared voice pipeline. The same recognition service handles the “Hey, LORD” phrase and tap-to-talk transcription. There is no bundled acoustic wake model, no OpenWakeWord ONNX pipeline, and no native Android wake-word plugin in this project.
 
-No Picovoice account, no AccessKey, no paid licence.
+## What the wake phrase supports
 
----
+The wake engine requests microphone access only after the user enables voice. It opens a continuous browser recognition session while the authenticated `/voice` page is active. The browser may end that session at any time; LORD restarts it with a bounded retry policy and stops after repeated interruptions. Users can retry or use tap-to-talk and typed chat. A wake phrase followed by command words in the same finalized transcript is submitted once; otherwise LORD opens a separate tap-to-talk recognition session. Recognition is stopped before spoken replies and is not restarted until playback has ended, preventing LORD's own speech from being treated as a command.
 
-## How it works
+This is best-effort foreground phrase recognition. It is not an always-on wake-word engine and does not promise uninterrupted listening. Browser and Android WebView behavior varies by OS version, speech-service provider, network, and device. The app stops voice when its route is left or the app/tab is backgrounded.
 
-```text
-mic (16 kHz)
-  → AudioWorklet (1280-sample chunks)
-    → melspectrogram.onnx         (mel features)
-      → embedding_model.onnx      (96-dim speech embeddings)
-        → hey_jarvis_v0.1.onnx    (wake-word classifier, P >= 0.5)
-          → fires onWake()        (LORD captures the next utterance)
-```
+## Android permissions and lifecycle
 
-The three ONNX models are pulled from the official `dscripka/openWakeWord` repository via jsDelivr the first time the user enables the wake word, then cached by the browser / WebView.
+`android/app/src/main/AndroidManifest.xml` declares `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS`. The user must grant microphone access through the operating system/WebView before recognition starts. The app does not hide microphone activity or bypass permission prompts. Android background microphone use is intentionally not implemented: there is no microphone foreground service, persistent notification, foreground-service microphone permission, or native wake detector. Locking the screen or backgrounding LORD ends voice mode and requires the user to return and enable it again.
 
-### "Hey Lord" vs "Hey Jarvis"
+Reliable background wake detection would require a separately designed native Android foreground service, visible notification, applicable foreground-service and microphone permissions, explicit user consent, and validation against current Android background-start rules and target device versions. None of those capabilities should be inferred from browser `SpeechRecognition` callbacks.
 
-The pre-trained model bank ships with `hey_jarvis`, `alexa`, `hey_mycroft`, and `hey_rhasspy` — **not** "Hey Lord". We default to `hey_jarvis` (closest pre-trained match) and brand it as "Hey Lord" in the UI.
+## Audio and privacy
 
-To get an exact "Hey Lord" detector:
+The microphone is requested only after a user action. Raw recordings are not stored by LORD or sent to LORD's chat endpoint; the recognized transcript is sent through the existing authenticated `/api/chat` path and voice messages are saved under the signed-in user's conversation history. The browser or Android speech recognition provider may process audio according to its own behavior and privacy terms. If recognition is unavailable, denied, interrupted, or offline, LORD keeps typed chat available.
 
-1. Follow the [openWakeWord custom-model notebook](https://github.com/dscripka/openWakeWord/blob/main/notebooks/automatic_model_training.ipynb).
-2. Train with the phrase `Hey Lord`.
-3. Export to ONNX and place the file at `public/wake/hey_lord.onnx`.
-4. The engine prefers `public/wake/hey_lord.onnx` over the default classifier automatically.
+## Verification
 
----
-
-## Files
-
-```text
-src/lib/voice/wake-engine.ts             — WakeEngine interface
-src/lib/voice/openwakeword-engine.ts     — ONNX pipeline (primary)
-src/lib/voice/webspeech-wake-engine.ts   — Web Speech fallback
-src/lib/voice/index.ts                   — createWakeEngine() factory
-src/components/lord/WakeWordProvider.tsx — React context, command capture
-src/components/lord/WakeIndicator.tsx    — corner mic badge (unchanged)
-```
-
----
-
-## Web build
-
-No setup needed — `bun install` already pulls `onnxruntime-web`. The first time a user toggles the mic badge the ONNX weights download (~6 MB total) and are cached.
-
-```bash
-bun install
-bun run dev
-```
-
----
-
-## Android (Capacitor) build
-
-OpenWakeWord runs inside the Android WebView using the same ONNX Runtime Web WASM — no native plugin needed.
-
-### 1. One-time setup
-
-```bash
-bun install
-bun run build           # produces dist/client
-npx cap sync android
-```
-
-### 2. Required Android permissions
-
-`android/app/src/main/AndroidManifest.xml` must declare:
-
-```xml
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.RECORD_AUDIO" />
-<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-```
-
-Add the `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS` lines if they aren't already there — `INTERNET` is included by default.
-
-### 3. WebView mic permission
-
-Capacitor's WebView prompts for the microphone the first time the JS code calls `getUserMedia`. Accept the prompt. To avoid prompting twice on Android 6+, also add the runtime-permission request via the `@capacitor/microphone-permission` community plugin or by handling `onPermissionRequest` in `MainActivity.java`.
-
-### 4. Backend URL
-
-In `.env` set:
-
-```env
-VITE_API_BASE_URL=https://your-deployed-backend.example.com
-```
-
-So the WebView can reach your `/api/chat` endpoint.
-
-### 5. Build the APK
-
-```bash
-bun run build:android   # web build + cap sync + gradle assembleDebug
-```
-
-Output: `android/app/build/outputs/apk/debug/app-debug.apk`.
-
-The GitHub Actions workflow in `.github/workflows/build-apk.yml` produces the same APK on every push to `main`.
-
----
-
-## Honest limits inside the WebView
-
-- The wake word only listens while the LORD app is **open and foregrounded**.
-- Android suspends the WebView's audio context when the app is backgrounded or the screen locks.
-- True always-on background detection requires a native Android `ForegroundService` running OpenWakeWord's TFLite build from a Capacitor plugin. That is a future enhancement.
-
----
-
-## Tuning
-
-- **Threshold** — edit `THRESHOLD` (default `0.5`) in `src/lib/voice/openwakeword-engine.ts`. Lower = more sensitive, more false triggers.
-- **Cooldown** — `COOLDOWN_MS` (default `1500` ms) prevents the same utterance from firing twice.
-- **Different keyword** — swap `DEFAULT_WAKE_URL` to any other classifier from the [openWakeWord models folder](https://github.com/dscripka/openWakeWord/tree/main/openwakeword/resources/models) (e.g. `alexa_v0.1.onnx`, `hey_mycroft_v0.1.onnx`).
+Automated tests cover wake phrase matching, bounded restart behavior, and microphone permission handling. Physical Android devices are still needed to verify WebView permission prompts, speech-service availability, headset routing, audio focus, interruptions, and behavior across OS versions. No claim of background wake-word reliability is made.

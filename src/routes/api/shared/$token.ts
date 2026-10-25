@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { apiErrorResponse } from "@/lib/api-error";
 import type { Database } from "@/integrations/supabase/types";
-import type { SharedConversation, SharedMessage } from "@/lib/share";
+import { isShareToken, type SharedConversation, type SharedMessage } from "@/lib/share";
 
 const requestId = () => crypto.randomUUID();
 
@@ -20,6 +20,14 @@ export const Route = createFileRoute("/api/shared/$token")({
       GET: async ({ params }) => {
         const rid = requestId();
         const token = params.token;
+        if (!isShareToken(token)) {
+          return apiErrorResponse(
+            404,
+            "NOT_FOUND",
+            "This shared conversation is unavailable.",
+            rid,
+          );
+        }
 
         const SUPABASE_URL = process.env.SUPABASE_URL;
         const SUPABASE_PUBLISHABLE_KEY =

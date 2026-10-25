@@ -34,6 +34,7 @@ export type VoiceAssistantState =
   | "command_listening"
   | "processing"
   | "speaking"
+  | "paused"
   | "review"
   | "error";
 
@@ -84,6 +85,8 @@ function asLegacyStatus(state: VoiceAssistantState, supported: boolean): LegacyW
       return "heard";
     case "speaking":
       return "speaking";
+    case "paused":
+      return "off";
     case "error":
       return supported ? "error" : "unsupported";
     default:
@@ -167,6 +170,15 @@ export function WakeWordProvider({
     pipelineRef.current?.stop();
     updateState("disabled");
   }, [updateState]);
+
+  const pauseForLifecycle = useCallback(
+    (message: string) => {
+      stop();
+      setErrorMessage(message);
+      updateState("paused");
+    },
+    [stop, updateState],
+  );
 
   const setVoiceOutputEnabled = useCallback((enabled: boolean) => {
     voiceOutputOverrideRef.current = true;
@@ -277,7 +289,10 @@ export function WakeWordProvider({
 
   const enable = useCallback(async () => {
     if (!(await checkProAccess())) return;
-    if (enabledRef.current || permissionInFlightRef.current) return;
+    // A recognition failure leaves voice opted in, but stops the engine.
+    // Let the explicit retry control create a fresh recognition session.
+    if ((enabledRef.current && stateRef.current !== "error") || permissionInFlightRef.current)
+      return;
     if (!supported) {
       setErrorMessage(
         "Speech recognition is not supported here. Use the text command box instead.",
@@ -431,16 +446,14 @@ export function WakeWordProvider({
           "speaking",
         ].includes(stateRef.current)
       ) {
-        stop();
-        setErrorMessage(
+        pauseForLifecycle(
           "Voice mode paused because this tab is in the background. Enable it again when you return.",
         );
-        updateState("error");
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [stop, updateState]);
+  }, [pauseForLifecycle]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -459,11 +472,9 @@ export function WakeWordProvider({
           "speaking",
         ].includes(stateRef.current)
       ) {
-        stop();
-        setErrorMessage(
+        pauseForLifecycle(
           "Voice mode paused because LORD is in the background. Return to the app and activate voice manually.",
         );
-        updateState("error");
       }
     })
       .then((handle) => {
@@ -477,7 +488,7 @@ export function WakeWordProvider({
       active = false;
       void listener?.remove();
     };
-  }, [stop, updateState]);
+  }, [pauseForLifecycle]);
 
   useEffect(
     () => () => {

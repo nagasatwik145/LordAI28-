@@ -40,21 +40,24 @@ export interface ProjectRow extends DbProject {
 // Queries
 // ============================================================
 
+export async function fetchProjects(userId: string): Promise<ProjectRow[]> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("user_id", userId)
+    .order("is_pinned", { ascending: false })
+    .order("last_accessed_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as DbProject[];
+}
+
 export function useProjects(userId: string | null | undefined) {
   return useQuery({
     queryKey: PROJECTS_KEY(userId),
     enabled: !!userId,
-    queryFn: async (): Promise<ProjectRow[]> => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("user_id", userId!)
-        .order("is_pinned", { ascending: false })
-        .order("last_accessed_at", { ascending: false });
-
-      if (error) throw error;
-      return (data ?? []) as DbProject[];
-    },
+    retry: false,
+    queryFn: () => fetchProjects(userId!),
   });
 }
 

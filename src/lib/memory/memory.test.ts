@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { detectMemories } from "./detector";
 import { retrieveMemories } from "./retrieval";
 import { isMemoryActive, isMemoryEnabled, type MemoryRecord } from "./types";
+import { arePossibleDuplicates } from "./graph";
+
+vi.mock("./embeddings", () => ({
+  embed: vi.fn(async () => {
+    throw new Error("embedding provider unavailable");
+  }),
+  cosineSimilarity: vi.fn(() => 0),
+}));
 
 describe("memory safety and extraction", () => {
   it("defaults memory on unless the user explicitly disables it", () => {
@@ -112,5 +120,70 @@ describe("semantic retrieval", () => {
 
     expect(retrieved.map(({ memory: item }) => item.id)).toEqual(["confirmed"]);
     expect(disabled).toEqual([]);
+  });
+
+  it("isolates retrieval by user and project while retaining global memories", async () => {
+    const memory = (id: string, projectId: string | null): MemoryRecord => ({
+      id,
+      user_id: id === "other-user" ? "user-2" : "user-1",
+      content: "React authentication uses JWT",
+      category: "project",
+      pinned: false,
+      confidence: 0.9,
+      source: "manual",
+      embedding: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      project_id: projectId,
+    });
+
+    const memories = [
+      memory("global", null),
+      memory("project-one", "project-1"),
+      memory("project-two", "project-2"),
+      memory("other-user", null),
+    ];
+    const inProject = await retrieveMemories("React authentication", memories, {
+      lightweight: true,
+      userId: "user-1",
+      projectId: "project-1",
+    });
+    const outsideProject = await retrieveMemories("React authentication", memories, {
+      lightweight: true,
+      userId: "user-1",
+    });
+
+    expect(inProject.map(({ memory: item }) => item.id).sort()).toEqual([
+      "global",
+      "project-one",
+    ]);
+    expect(outsideProject.map(({ memory: item }) => item.id)).toEqual(["global"]);
+  });
+
+  it("uses keyword fallback when embedding generation fails and rejects secret records", async () => {
+    const record: MemoryRecord = {
+      id: "auth",
+      user_id: "user-1",
+      content: "The project uses JWT authentication",
+      category: "project",
+      pinned: false,
+      confidence: 1,
+      source: "manual",
+      embedding: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const secret = { ...record, id: "secret", content: "My password is hunter2" };
+
+    const result = await retrieveMemories("JWT authentication", [record, secret]);
+
+    expect(result.map(({ memory }) => memory.id)).toEqual(["auth"]);
+  });
+
+  it("recognizes repeated facts as duplicates and distinguishes corrections", () => {
+    expect(arePossibleDuplicates("I prefer TypeScript", "I prefer TypeScript!")).toBe(true);
+    expect(arePossibleDuplicates("I prefer TypeScript", "I do not prefer TypeScript")).toBe(
+      false,
+    );
   });
 });

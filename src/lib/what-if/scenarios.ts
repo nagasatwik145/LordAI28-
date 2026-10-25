@@ -111,8 +111,13 @@ export function analyzeScenario(scenario: WhatIfScenario): WhatIfAnalysis {
       unit: "points",
       estimatedImpact: options.reduce((sum, option) => sum + option.risk * pct, 0) / options.length,
     },
-  ].sort((left, right) => {
-    const unitOrder = { "cost units": 0, hours: 1, points: 2 };
+  ];
+  drivers.sort((left, right) => {
+    const unitOrder: Record<WhatIfDriver["unit"], number> = {
+      "cost units": 0,
+      hours: 1,
+      points: 2,
+    };
     return (
       unitOrder[left.unit] - unitOrder[right.unit] || right.estimatedImpact - left.estimatedImpact
     );

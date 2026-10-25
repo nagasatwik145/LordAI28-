@@ -1,6 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, FolderOpen, Trash2, MoreHorizontal, Pencil, Pin, Archive } from "lucide-react";
+import {
+  Plus,
+  FolderOpen,
+  Trash2,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  Archive,
+  RefreshCw,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/lord/AppShell";
@@ -66,7 +75,8 @@ function ProjectsPage() {
   const [color, setColor] = useState(COLORS[0]);
   const [icon, setIcon] = useState(ICONS[0]);
 
-  const { data: projects, isLoading } = useProjects(user?.id);
+  const projectsQuery = useProjects(user?.id);
+  const { data: projects, isLoading, isError, error, refetch, isFetching } = projectsQuery;
   const createProject = useCreateProject(user?.id);
   const deleteProject = useDeleteProject(user?.id);
   const updateProject = useUpdateProject(user?.id);
@@ -203,6 +213,22 @@ function ProjectsPage() {
               <Card key={i} className="h-40 animate-pulse bg-muted/50" />
             ))}
           </div>
+        ) : isError ? (
+          <Card className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+            <p className="text-sm text-destructive">
+              Could not load projects:{" "}
+              {error instanceof Error ? error.message : "The project request failed."}
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+              {isFetching ? "Retrying…" : "Retry"}
+            </Button>
+          </Card>
         ) : projects && projects.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (

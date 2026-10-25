@@ -6,7 +6,7 @@ import { recordModelAttempt } from "./model-availability";
 import { createLordError } from "../lord-error";
 import { MODELS } from "./models";
 import type { ChatMessage } from "./types";
-import { buildSourcesFooter, type WebSource } from "./web-sources";
+import { buildSourcesFooter, type WebResearchStatus, type WebSource } from "./web-sources";
 import {
   buildClaimAnalysisPrompt,
   buildRealityCheckReport,
@@ -29,6 +29,7 @@ export function streamChat(
   sources: readonly WebSource[] = [],
   maxTokens = 1400,
   realityCheck?: RealityCheckOptions,
+  webResearchStatus?: WebResearchStatus,
 ): Response {
   const startedAt = Date.now();
   const models = candidateModelIds.length > 0 ? candidateModelIds : [MODELS.DEFAULT];
@@ -200,6 +201,19 @@ export function streamChat(
           writer.write({ type: "reasoning-delta", id: reasoningId, delta: selectedReasoning });
           writer.write({ type: "reasoning-end", id: reasoningId });
         }
+        if (sources.length) {
+          writer.write({
+            type: "data-web-sources",
+            data: sources.map((source, index) => ({
+              sourceId: `web-source-${index + 1}`,
+              title: source.title,
+              url: source.url,
+              publishedDate: source.publishedDate,
+              domain: source.domain,
+              verification: source.verification ?? "snippet",
+            })),
+          });
+        }
         for (const [index, source] of sources.entries()) {
           writer.write({
             type: "source-url",
@@ -211,6 +225,9 @@ export function streamChat(
         const sourcesFooter = buildSourcesFooter(sources);
         if (sourcesFooter)
           writer.write({ type: "text-delta", id: messageId, delta: sourcesFooter });
+        if (webResearchStatus) {
+          writer.write({ type: "data-web-research", data: webResearchStatus });
+        }
         writer.write({ type: "text-end", id: messageId });
       } catch (error) {
         const normalized = normalizeOpenRouterError(error);

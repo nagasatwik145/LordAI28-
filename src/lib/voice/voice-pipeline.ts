@@ -121,7 +121,11 @@ export class VoicePipeline {
       this.onError(
         event.error === "not-allowed" || event.error === "service-not-allowed"
           ? "Microphone permission was denied. Allow access and try again."
-          : `Speech recognition was interrupted (${event.error ?? "unknown error"}). Tap the microphone to retry.`,
+          : event.error === "network"
+            ? "Speech recognition could not reach its speech service. Check your connection and retry, or use text chat."
+            : event.error === "audio-capture"
+              ? "No usable microphone was found. Check your microphone or use text chat."
+              : `Speech recognition was interrupted (${event.error ?? "unknown error"}). Tap the microphone to retry.`,
       );
       this.onStatusChange("error");
     };

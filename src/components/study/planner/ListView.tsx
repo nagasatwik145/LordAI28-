@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Clock, AlertTriangle } from "lucide-react";
+import { Clock, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TaskContextMenu } from "./TaskContextMenu";
 import type { LearningPlanTask } from "@/lib/learning/types";
@@ -10,9 +10,16 @@ interface ListViewProps {
   dailyTarget: number;
   onTaskClick: (task: LearningPlanTask) => void;
   onTaskAction?: (task: LearningPlanTask, action: string) => void;
+  onStartFocus?: (task: LearningPlanTask) => void;
 }
 
-export function ListView({ tasks, dailyTarget, onTaskClick, onTaskAction }: ListViewProps) {
+export function ListView({
+  tasks,
+  dailyTarget,
+  onTaskClick,
+  onTaskAction,
+  onStartFocus,
+}: ListViewProps) {
   const sorted = useMemo(
     () =>
       [...tasks].sort((a, b) => {
@@ -75,6 +82,17 @@ export function ListView({ tasks, dailyTarget, onTaskClick, onTaskAction }: List
         </div>
       </button>
       <div className="flex items-center gap-2 ml-2">
+        {onStartFocus && !isCompleted && task.status !== "skipped" && (
+          <button
+            type="button"
+            onClick={() => onStartFocus(task)}
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-primary/30 px-2 text-xs text-primary hover:bg-primary/10"
+            aria-label={`Start a focus timer for ${task.title}`}
+          >
+            <Play className="h-3.5 w-3.5" />
+            Focus
+          </button>
+        )}
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-xs font-medium",

@@ -99,6 +99,7 @@ export class WebSpeechWakeEngine implements WakeEngine {
       recognition.stop();
     };
     recognition.onerror = (event) => {
+      if (this.recognition !== recognition) return;
       const code = event.error ?? "unknown";
       if (code === "aborted") return;
       if (code === "not-allowed" || code === "service-not-allowed") {
@@ -109,7 +110,11 @@ export class WebSpeechWakeEngine implements WakeEngine {
       if (code !== "no-speech") this.onError(`Speech recognition was interrupted (${code}).`);
     };
     recognition.onend = () => {
-      if (this.recognition === recognition) this.recognition = null;
+      // An aborted session can dispatch `end` after stop() and a subsequent
+      // start(). Ignore that stale callback so it cannot create a second
+      // recognition session beside the current one.
+      if (this.recognition !== recognition) return;
+      this.recognition = null;
       if (!this.active) return;
       if (this.restartTimer) clearTimeout(this.restartTimer);
 

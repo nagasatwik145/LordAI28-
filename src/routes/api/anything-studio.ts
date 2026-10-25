@@ -619,48 +619,49 @@ export const Route = createFileRoute("/api/anything-studio")({
         }
         const input = StudioActionSchema.safeParse(body);
         if (!input.success) return responseError(400, "INVALID_REQUEST", "Invalid Studio request.");
+        const studioInput = input.data;
 
         try {
-          if (input.data.action === "create") {
+          if (studioInput.action === "create") {
             const bundle = await createStudio(
               supabase,
               userId,
-              input.data,
+              studioInput,
               AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
             );
             return Response.json(bundle, { status: 201, headers: { "Cache-Control": "no-store" } });
           }
-          if (input.data.action === "generate") {
+          if (studioInput.action === "generate") {
             const generated = await generateArtifact(
               supabase,
               userId,
-              input.data.projectId,
-              input.data.artifactId,
+              studioInput.projectId,
+              studioInput.artifactId,
               request.signal,
             );
             if (generated.error) return generated.error;
             return Response.json(generated.result, { headers: { "Cache-Control": "no-store" } });
           }
-          if (input.data.action === "rename") {
-            if (!(await getStudioProject(supabase, input.data.projectId, userId))) {
+          if (studioInput.action === "rename") {
+            if (!(await getStudioProject(supabase, studioInput.projectId, userId))) {
               return responseError(404, "NOT_FOUND", "Studio project not found.");
             }
             const { data, error } = await supabase
               .from("projects")
-              .update({ name: input.data.name, updated_at: new Date().toISOString() })
-              .eq("id", input.data.projectId)
+              .update({ name: studioInput.name, updated_at: new Date().toISOString() })
+              .eq("id", studioInput.projectId)
               .eq("user_id", userId)
               .select("id,name,description,color,icon")
               .maybeSingle();
             if (error) throw error;
             if (!data) return responseError(404, "NOT_FOUND", "Studio project not found.");
-            await touchStudioProject(supabase, input.data.projectId, userId);
+            await touchStudioProject(supabase, studioInput.projectId, userId);
             return Response.json({ project: data });
           }
-          if (input.data.action === "update-artifact") {
-            const bundle = await loadBundle(supabase, input.data.projectId, userId);
+          if (studioInput.action === "update-artifact") {
+            const bundle = await loadBundle(supabase, studioInput.projectId, userId);
             if (!bundle) return responseError(404, "NOT_FOUND", "Studio project not found.");
-            const artifact = bundle.artifacts.find((item) => item.id === input.data.artifactId);
+            const artifact = bundle.artifacts.find((item) => item.id === studioInput.artifactId);
             if (!artifact) return responseError(404, "NOT_FOUND", "Deliverable not found.");
             if (artifact.status === "generating") {
               return responseError(409, "GENERATION_IN_PROGRESS", "Wait for generation to finish before editing.");
@@ -673,7 +674,7 @@ export const Route = createFileRoute("/api/anything-studio")({
                 "Image assets can only be changed through the configured image generator.",
               );
             }
-            const validation = validateStudioArtifact(kind, input.data.content);
+            const validation = validateStudioArtifact(kind, studioInput.content);
             if (!validation.valid) {
               return Response.json(
                 {
@@ -686,21 +687,21 @@ export const Route = createFileRoute("/api/anything-studio")({
                 { status: 422 },
               );
             }
-            if (input.data.content !== artifact.content) {
+            if (studioInput.content !== artifact.content) {
               await persistArtifactRevision(
                 supabase,
                 userId,
                 artifact,
-                input.data.content,
+                studioInput.content,
                 validation,
                 "completed",
               );
             }
-            const updated = await loadBundle(supabase, input.data.projectId, userId);
+            const updated = await loadBundle(supabase, studioInput.projectId, userId);
             return Response.json(updated, { headers: { "Cache-Control": "no-store" } });
           }
-          if (input.data.action === "duplicate") {
-            const source = await loadBundle(supabase, input.data.projectId, userId);
+          if (studioInput.action === "duplicate") {
+            const source = await loadBundle(supabase, studioInput.projectId, userId);
             if (!source) return responseError(404, "NOT_FOUND", "Studio project not found.");
             const { data: project, error: projectError } = await supabase
               .from("projects")
@@ -739,7 +740,10 @@ export const Route = createFileRoute("/api/anything-studio")({
               dependencies: toJson(
                 dependencyIds(artifact.dependencies)
                   .map((dependencyId) => idMap.get(dependencyId))
-                  .filter((dependencyId): dependencyId is string => Boolean(dependencyId)),
+                  .filter(
+                    (dependencyId): dependencyId is NonNullable<typeof dependencyId> =>
+                      dependencyId !== undefined,
+                  ),
               ),
               validation: artifact.validation,
               revision: artifact.revision > 0 ? 1 : 0,
@@ -774,7 +778,7 @@ export const Route = createFileRoute("/api/anything-studio")({
           return responseError(400, "INVALID_REQUEST", "Unsupported Studio action.");
         } catch (error) {
           console.error("[anything-studio] request failed", {
-            action: input.data.action,
+            action: studioInput.action,
             errorName: error instanceof Error ? error.name : "unknown",
           });
           const message =

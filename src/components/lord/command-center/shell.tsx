@@ -13,6 +13,7 @@ import {
   TerminalSquare,
   ShieldAlert,
   Circle,
+  HeartPulse,
 } from "lucide-react";
 import { GlassCard, SectionTitle, StatusDot, ORBITRON, Spinner, activityColor } from "./ui";
 import { useStatus, useActivity, useAgent, useStop, type AgentResult } from "./api";
@@ -29,6 +30,7 @@ const NAV = [
   { to: "/command-center/mobile", label: "Mobile", icon: Smartphone },
   { to: "/command-center/smart-home", label: "Smart Home", icon: Home },
   { to: "/command-center/automations", label: "Automations", icon: Workflow },
+  { to: "/observability", label: "Health Center", icon: HeartPulse },
   { to: "/command-center/settings", label: "Settings", icon: Settings },
 ] as const;
 

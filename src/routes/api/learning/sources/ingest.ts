@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
 import { apiErrorResponse } from "@/lib/api-error";
+import { isPublicAddress, safeFetchText } from "@/lib/safe-fetch.server";
 
 const IngestUrlSchema = z.object({
   url: z.string().url(),
@@ -12,20 +13,24 @@ const IngestUrlSchema = z.object({
 function isSSRFBlocked(urlString: string): boolean {
   try {
     const url = new URL(urlString);
-    if (!["http:", "https:"].includes(url.protocol)) return true;
-
-    const hostname = url.hostname.toLowerCase();
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      (url.port !== "" && url.port !== (url.protocol === "https:" ? "443" : "80"))
+    ) {
+      return true;
+    }
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
     if (
       hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
+      hostname.endsWith(".localhost") ||
       hostname.endsWith(".local") ||
-      hostname === "169.254.169.254" ||
-      hostname.startsWith("10.") ||
-      hostname.startsWith("192.168.") ||
-      (hostname.startsWith("172.") && /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)) ||
-      hostname.startsWith("0.") ||
-      hostname.startsWith("255.") ||
-      hostname.endsWith(".onion")
+      hostname.endsWith(".internal") ||
+      hostname.endsWith(".test") ||
+      hostname.endsWith(".invalid") ||
+      hostname.endsWith(".onion") ||
+      (isIPLiteral(hostname) && !isPublicAddress(hostname))
     ) {
       return true;
     }
@@ -33,6 +38,10 @@ function isSSRFBlocked(urlString: string): boolean {
     return true;
   }
   return false;
+}
+
+function isIPLiteral(hostname: string): boolean {
+  return hostname.includes(":") || /^\d+(?:\.\d+){3}$/.test(hostname);
 }
 
 export const Route = createFileRoute("/api/learning/sources/ingest")({
@@ -54,13 +63,9 @@ export const Route = createFileRoute("/api/learning/sources/ingest")({
           return apiErrorResponse(401, "AI_AUTH_ERROR", "Sign in to save sources.", requestId);
 
         try {
-          const response = await fetch(parsed.data.url, {
-            redirect: "error",
-            headers: {
-              "User-Agent": "Mozilla/5.0 (compatible; LORD Study Bot/1.0)",
-              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-            signal: AbortSignal.timeout(15_000),
+          const response = await safeFetchText(parsed.data.url, {
+            signal: request.signal,
+            maxBytes: 1_000_000,
           });
           if (!response.ok)
             return apiErrorResponse(
@@ -77,7 +82,7 @@ export const Route = createFileRoute("/api/learning/sources/ingest")({
               "Only text and HTML links can be imported.",
               requestId,
             );
-          const html = await response.text();
+          const html = response.text;
           const text = html
             .replace(/<script[\s\S]*?<\/script>/gi, " ")
             .replace(/<style[\s\S]*?<\/style>/gi, " ")

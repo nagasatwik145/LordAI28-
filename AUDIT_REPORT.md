@@ -1,6 +1,36 @@
 # LORD AI Project Audit
 
-Audit date: 2026-06-24
+Audit date: 2026-10-24
+
+## Audit Update — 2026-10-24
+
+This update records the security fixes and verification performed after the baseline audit dated 2026-06-24. The older product-gap observations below are retained for context and were not all revalidated in this run.
+
+### Security and reliability fixes
+
+- Server-side URL reading and learning-source ingestion now share `safeFetchText`, which rejects non-public addresses, pins validated DNS answers, revalidates redirects, limits response size and duration, and restricts protocols and ports. This closes the arbitrary-URL SSRF paths, including IPv6 loopback targets.
+- Public share lookups reject malformed UUID tokens before calling the database RPC and return 404 rather than exposing a database error as a 500.
+- Provider-key diagnostics no longer include a key prefix; summaries expose only metadata such as key name, presence, and length.
+- Corrected TypeScript errors in game handling, What-If scenarios, Anything Studio, chat project context, Mind Graph, voice mission actions, billing event types, and API error codes.
+
+### Dependency audit
+
+- The initial `npm audit` reported 34 advisories: 2 critical, 14 high, 14 moderate, and 4 low.
+- `npm audit fix` applied semver-compatible lockfile updates (28 packages changed, 3 added, 4 removed; `package.json` unchanged). The subsequent audit reports 15 advisories: 0 critical, 4 high, 7 moderate, and 4 low.
+- Remaining affected paths include `postal-mime` through `@heyputer/puter.js`, `image-size` through `pptxgenjs`, Vitest and its mocker/coverage packages, `uuid` through `exceljs` and `xcode`, and KaTeX through the Markdown math packages.
+- No forced updates were applied. npm's forced recommendations include compatibility-breaking version changes or downgrades for packages such as `pptxgenjs`, `rehype-katex`, `exceljs`, and `@capacitor/cli`; changing those without targeted feature tests would be unsafe. The remaining advisory paths need targeted upstream/compatibility review.
+
+### Current verification
+
+- `npm test -- --reporter=dot`: 74 test files passed, 1 skipped; 433 tests passed, 2 skipped.
+- `npx tsc --noEmit`: passed.
+- `npm run build`: passed.
+- `npm run lint`: failed with 678 Prettier errors and 16 warnings across the repository. Broad formatting churn was not applied as part of this audit.
+- A GET-only smoke test exercised 123 discovered URLs (46 pages and 77 API routes). Protected API routes returned expected unauthenticated responses; malformed share tokens returned 404. No authenticated feature workflows were exercised.
+- Safe public URL fetching was smoke-tested successfully. Browser automation was unavailable, and no real AI-provider or payment calls were made.
+- Android packaging was not completed: JDK 25 hit a Gradle class-version incompatibility; retrying with JDK 21 passed that stage but stopped because the Android SDK is not installed/configured.
+
+---
 
 ## Architecture Summary
 
@@ -40,7 +70,7 @@ Core data surfaces:
 - Fix: Updated settings mutation to `createServerFn().validator()`.
 - Result: Deprecation warning removed.
 
-## Important Remaining Issues
+## Previously Identified Product Gaps (Not Revalidated in 2026-10-24 Run)
 
 1. Voice is wake detection only, not full voice assistant flow
 
@@ -84,7 +114,7 @@ Core data surfaces:
 - Impact: Users and contributors get an inaccurate picture of feature maturity.
 - Recommended fix: update README/settings copy to distinguish account-backed data from browser-only state.
 
-## Minor Issues
+## Previously Identified Minor Issues (Not Revalidated in 2026-10-24 Run)
 
 1. Lint passes with 8 Fast Refresh warnings in mixed component/export files.
 
@@ -98,14 +128,14 @@ Core data surfaces:
 
 6. The root metadata includes duplicated `description` entries and some Lovable/project boilerplate copy that does not match LORD AI.
 
-## Security Notes
+## Baseline Security Notes (2026-06-24)
 
 - API key handling is server-only for Lovable AI, which is good.
 - Supabase RLS exists for conversations, messages, memories, profiles, and settings.
 - The AI endpoint is authenticated after the fix, reducing credit-abuse risk.
 - Client-side localStorage remains appropriate only for non-sensitive browser-local state; avoid storing secrets or highly sensitive memory there.
 
-## Verification
+## Verification (2026-06-24 Baseline; Superseded by Current Verification Above)
 
 Passed:
 
@@ -121,7 +151,7 @@ Notes:
 - `npm run build` must be allowed to open a local preview server for TanStack prerendering. In the sandbox it failed with `listen EPERM`; outside the sandbox it completed and prerendered `/`.
 - Production build still warns about large chunks, mainly from ONNX/runtime assets and the main app bundle.
 
-## Recommended Next Fix Order
+## Recommendations from the 2026-06-24 Baseline
 
 1. Complete the end-to-end voice command flow and make settings drive TTS.
 2. Lazy-load or defer ONNX wake-word runtime to improve mobile performance.

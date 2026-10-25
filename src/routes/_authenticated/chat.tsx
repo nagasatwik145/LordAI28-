@@ -33,6 +33,12 @@ import { ChatInput } from "@/components/lord/chat/input/ChatInput";
 import { ModeSelector, ModelSelector } from "@/components/lord/chat/input/ModelSelector";
 import { FREE_CHAT_MODEL_IDS } from "@/lib/ai/chat-model-catalog";
 import { isUnsafeAssistantError, safeChatErrorMessage } from "@/lib/ai/safe-chat-error";
+import {
+  linkSourceCitations,
+  normalizeSafeSourceUrl,
+  shouldResearchQuestion,
+  type WebResearchStatus,
+} from "@/lib/ai/web-sources";
 import { useChatModelCatalog } from "@/lib/ai/use-chat-model-catalog";
 import { claimRequestOnce } from "@/lib/ai/request-dedup";
 import {
@@ -104,7 +110,12 @@ export const Route = createFileRoute("/_authenticated/chat")({
   head: () => ({
     meta: [{ title: "LORD — Chat" }, { name: "description", content: "Talk to LORD AI." }],
   }),
-  validateSearch: z.object({ conversationId: z.string().uuid().optional() }).catch({}),
+  validateSearch: z
+    .object({
+      conversationId: z.string().uuid().optional(),
+      projectId: z.string().uuid().optional(),
+    })
+    .catch({}),
   component: ChatPage,
 });
 
@@ -224,6 +235,15 @@ interface CouncilContribution {
   summary: string;
 }
 
+interface ChatSourceReference {
+  sourceId: string;
+  url: string;
+  title?: string;
+  publishedDate?: string;
+  domain?: string;
+  verification?: "page" | "snippet" | "unavailable";
+}
+
 interface CouncilProgress {
   status:
     | "selecting"
@@ -251,6 +271,19 @@ function isCouncilProgress(value: unknown): value is CouncilProgress {
     Array.isArray(candidate.roles) &&
     Array.isArray(candidate.contributions) &&
     Array.isArray(candidate.disagreements)
+  );
+}
+
+function isWebResearchStatus(value: unknown): value is WebResearchStatus {
+  if (!value || typeof value !== "object") return false;
+  const status = value as Partial<WebResearchStatus>;
+  return (
+    (status.status === "complete" ||
+      status.status === "partial" ||
+      status.status === "unavailable" ||
+      status.status === "no-results") &&
+    Number.isInteger(status.sourceCount) &&
+    Number.isInteger(status.verifiedPageCount)
   );
 }
 
@@ -310,7 +343,8 @@ function isDefaultTitle(title: string | undefined | null): boolean {
 }
 
 function ChatPage() {
-  const { conversationId: requestedConversationId } = Route.useSearch();
+  const { conversationId: requestedConversationId, projectId: requestedProjectId } =
+    Route.useSearch();
   const qc = useQueryClient();
   const modelCatalogQuery = useChatModelCatalog();
   const { user } = Route.useRouteContext();
@@ -512,6 +546,7 @@ function ChatPage() {
   const requestBodyRef = useRef({
     mode,
     modelId: selectedModelId,
+    projectId: requestedProjectId,
     context: {
       page: currentRoute,
       workflow: activeWorkflow,
@@ -530,6 +565,7 @@ function ChatPage() {
   requestBodyRef.current = {
     mode,
     modelId: selectedModelId,
+    projectId: requestedProjectId,
     context: {
       page: currentRoute,
       workflow: activeWorkflow,
@@ -692,6 +728,7 @@ function ChatPage() {
         .map((part) => (part as { text?: string }).text ?? "")
         .join("");
       const shouldTreatAsError = isError || isUnsafeAssistantError(unsafeCompletedText);
+      void authenticatedFetch("/api/analytics/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: shouldTreatAsError ? "chat_failed" : "chat_succeeded", feature: "chat", ...(shouldTreatAsError ? { category: "provider" } : {}) }) }).catch(() => undefined);
       setProcessingLabel(null);
       if (councilEnabledRef.current && shouldTreatAsError) {
         setCouncilProgress((current) =>
@@ -782,19 +819,43 @@ function ChatPage() {
           .filter((p) => p.type === "text")
           .map((p) => (p as { text: string }).text)
           .join("") ?? "";
+      const researchSources =
+        assistantMessage?.parts
+          .filter((part) => part.type === "data-web-sources")
+          .flatMap((part) => {
+            const data = (part as { data?: unknown }).data;
+            if (!Array.isArray(data)) return [];
+            return data.filter(
+              (source): source is ChatSourceReference =>
+                Boolean(source) &&
+                typeof source === "object" &&
+                typeof (source as ChatSourceReference).sourceId === "string" &&
+                typeof (source as ChatSourceReference).url === "string",
+            );
+          }) ?? [];
+      const researchStatusPart = assistantMessage?.parts.find(
+        (part) => part.type === "data-web-research",
+      );
+      const researchStatusData =
+        researchStatusPart && "data" in researchStatusPart ? researchStatusPart.data : undefined;
+      const researchStatus = isWebResearchStatus(researchStatusData)
+        ? researchStatusData
+        : undefined;
       const assistantSupport = {
-        chatSources:
-          assistantMessage?.parts
-            .filter((part) => part.type === "source-url")
-            .map((part) => {
-              const source = part as { sourceId: string; url: string; title?: string };
-              return { sourceId: source.sourceId, url: source.url, title: source.title ?? "" };
-            }) ?? [],
+        chatSources: researchSources.length
+          ? researchSources
+          : (assistantMessage?.parts
+              .filter((part) => part.type === "source-url")
+              .map((part) => {
+                const source = part as { sourceId: string; url: string; title?: string };
+                return { sourceId: source.sourceId, url: source.url, title: source.title ?? "" };
+              }) ?? []),
         chatReasoning:
           assistantMessage?.parts
             .filter((part) => part.type === "reasoning")
             .map((part) => (part as { text?: string }).text ?? "")
             .join("\n") ?? "",
+        ...(researchStatus ? { chatResearchStatus: researchStatus } : {}),
         ...(isCouncilProgress(assistantMetadata?.council)
           ? { council: assistantMetadata.council }
           : {}),
@@ -802,6 +863,7 @@ function ChatPage() {
       const hasAssistantSupport =
         assistantSupport.chatSources.length > 0 ||
         Boolean(assistantSupport.chatReasoning.trim()) ||
+        Boolean(researchStatus) ||
         Boolean(isCouncilProgress(assistantMetadata?.council));
       const supportJson =
         assistantSupport as unknown as import("@/integrations/supabase/types").Json;
@@ -974,6 +1036,7 @@ function ChatPage() {
     },
   });
 
+  const busy = savingMessage || status === "submitted" || status === "streaming";
   isAssistantStreamingRef.current = status === "submitted" || status === "streaming";
 
   // Creation promises are deliberately kept outside React state. The matching
@@ -1603,8 +1666,9 @@ function ChatPage() {
         disagreements: [],
       });
     }
-    if (realityCheck) setProcessingLabel("Checking sources and calculations…");
-    else if (webSearch) setProcessingLabel("Searching live web sources…");
+    if (realityCheck) setProcessingLabel("Searching sources and checking claims…");
+    else if (webSearch || shouldResearchQuestion(getMessageText(message)))
+      setProcessingLabel("Searching and verifying live sources…");
     else if (councilEnabledRef.current) setProcessingLabel("LORD Council is selecting models…");
     if (isNew) {
       setPendingInitialSend({ conversationId, message });
@@ -1718,8 +1782,6 @@ function ChatPage() {
     setShowNewMessages(false);
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: "smooth" });
   };
-
-  const busy = savingMessage || status === "submitted" || status === "streaming";
 
   useEffect(() => {
     const focusComposer = () => {
@@ -1927,7 +1989,7 @@ function ChatPage() {
     const detected = detectMemories(text);
     if (detected.length === 0) return false;
 
-    const novel = detected.filter((d) => !memoryExists(memories, d.content));
+    const novel = detected.filter((d) => memoryExists(memories, d.content, requestedProjectId));
     if (novel.length === 0) return false;
 
     const threshold = settings?.confidence_threshold ?? 0.65;
@@ -2536,19 +2598,44 @@ function ChatPage() {
             errorParts.push("LORD AI couldn’t complete that response. Retry to continue.");
           }
           const storedSources =
-            (
-              m.metadata as
-                | { chatSources?: Array<{ sourceId: string; url: string; title?: string }> }
-                | undefined
-            )?.chatSources ?? [];
+            (m.metadata as { chatSources?: ChatSourceReference[] } | undefined)?.chatSources ?? [];
           const sourceParts = [
             ...m.parts
+              .filter((part) => part.type === "data-web-sources")
+              .flatMap((part) => {
+                const data = (part as { data?: unknown }).data;
+                if (!Array.isArray(data)) return [];
+                return data.filter(
+                  (source): source is ChatSourceReference =>
+                    Boolean(source) &&
+                    typeof source === "object" &&
+                    typeof (source as ChatSourceReference).sourceId === "string" &&
+                    typeof (source as ChatSourceReference).url === "string",
+                );
+              }),
+            ...m.parts
               .filter((part) => part.type === "source-url")
-              .map((part) => part as { sourceId: string; url: string; title?: string }),
+              .map((part) => part as ChatSourceReference),
             ...storedSources,
           ].filter(
-            (source, index, all) => all.findIndex((item) => item.url === source.url) === index,
+            (source, index, all) =>
+              normalizeSafeSourceUrl(source.url) !== null &&
+              all.findIndex((item) => item.url === source.url) === index,
           );
+          const researchStatusPart = m.parts.find((part) => part.type === "data-web-research");
+          const researchStatusData =
+            researchStatusPart && "data" in researchStatusPart
+              ? researchStatusPart.data
+              : undefined;
+          const storedResearchStatus = (m.metadata as { chatResearchStatus?: unknown } | undefined)
+            ?.chatResearchStatus;
+          const researchStatus = isWebResearchStatus(researchStatusData)
+            ? researchStatusData
+            : isWebResearchStatus(storedResearchStatus)
+              ? storedResearchStatus
+              : null;
+          const linkedVisibleText =
+            m.role === "assistant" ? linkSourceCitations(visibleText, sourceParts) : visibleText;
           const reasoningText = (
             (m.metadata as { chatReasoning?: string } | undefined)?.chatReasoning ||
             m.parts
@@ -2611,7 +2698,7 @@ function ChatPage() {
                   </div>
                 ) : (
                   <div className="text-sm text-foreground">
-                    <RichMessage text={visibleText} streaming={isStreaming} />
+                    <RichMessage text={linkedVisibleText} streaming={isStreaming} />
                     {imageGeneration && <GeneratedImageMessage data={imageGeneration} />}
                     {leakedToolPayload && (
                       <GeneratedImageMessage
@@ -2640,6 +2727,18 @@ function ChatPage() {
                                   >
                                     {source.title || source.url}
                                   </a>
+                                  {source.publishedDate && (
+                                    <span className="ml-2 text-muted-foreground">
+                                      Published {source.publishedDate}
+                                    </span>
+                                  )}
+                                  {source.verification && source.verification !== "page" && (
+                                    <span className="ml-2 text-amber-200/80">
+                                      {source.verification === "unavailable"
+                                        ? "Page unavailable; snippet only"
+                                        : "Search snippet only"}
+                                    </span>
+                                  )}
                                 </li>
                               ))}
                             </ul>
@@ -2654,6 +2753,37 @@ function ChatPage() {
                           )}
                         </div>
                       </details>
+                    )}
+                    {researchStatus && (
+                      <div
+                        role="status"
+                        className={cn(
+                          "mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs",
+                          researchStatus.status === "complete"
+                            ? "border-emerald-300/20 bg-emerald-300/[0.04] text-emerald-100/80"
+                            : "border-amber-200/20 bg-amber-200/[0.04] text-amber-100/80",
+                        )}
+                      >
+                        <Globe2 className="h-3.5 w-3.5 shrink-0" />
+                        <span>
+                          {researchStatus.status === "complete"
+                            ? `Research completed · ${researchStatus.verifiedPageCount} page${researchStatus.verifiedPageCount === 1 ? "" : "s"} accessed`
+                            : researchStatus.status === "partial"
+                              ? `Research partial · ${researchStatus.verifiedPageCount} of ${researchStatus.sourceCount} source pages accessed; other results are snippets only`
+                              : researchStatus.status === "no-results"
+                                ? "No usable search results; current claims were not verified"
+                                : "Live research unavailable; current claims were not verified"}
+                        </span>
+                        {researchStatus.status !== "complete" && (
+                          <button
+                            type="button"
+                            onClick={() => void regenerateLast()}
+                            className="rounded-md border border-current/30 px-2 py-1 font-medium hover:bg-white/5"
+                          >
+                            Retry research
+                          </button>
+                        )}
+                      </div>
                     )}
                     {messageCouncil && (
                       <details className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.03] text-xs">
@@ -3119,7 +3249,8 @@ function ChatPage() {
                     )}
                     {!councilProgress && (
                       <p className="mt-2 text-white/50">
-                        The next message will use independently selected models when available. Simple tasks stay single-model; reduced mode is labeled clearly.
+                        The next message will use independently selected models when available.
+                        Simple tasks stay single-model; reduced mode is labeled clearly.
                       </p>
                     )}
                     {councilProgress?.roles.length ? (

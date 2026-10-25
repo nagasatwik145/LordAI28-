@@ -3,6 +3,7 @@ import {
   hasConfiguredLifetimeIdentity,
   hasProEntitlement,
   isEntitlementActive,
+  LORD_PRO_ENABLED,
 } from "./entitlements.server";
 
 const supabaseAdmin = vi.hoisted(() => ({
@@ -73,6 +74,41 @@ describe("Pro entitlements", () => {
         }),
       ).toBe(false);
     }
+  });
+
+  it("enables Pro access for verified configured lifetime identities", async () => {
+    const email = "nagasatwik145@gmail.com";
+    const id = identities[email];
+    process.env.LORD_LIFETIME_PRO_USERS = `${id}:${email}`;
+
+    expect(LORD_PRO_ENABLED).toBe(true);
+    await expect(
+      hasProEntitlement({ id, email, email_confirmed_at: "2026-01-01T00:00:00Z" }),
+    ).resolves.toBe(true);
+    expect(supabaseAdmin.from).not.toHaveBeenCalled();
+  });
+
+  it("grants Pro access for an active unexpired subscription", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        status: "active",
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+      },
+      error: null,
+    });
+    supabaseAdmin.from.mockImplementation(() => ({
+      select: () => ({
+        eq: () => ({ maybeSingle }),
+      }),
+    }));
+
+    await expect(
+      hasProEntitlement({
+        id: "user-1",
+        email: "member@example.com",
+        email_confirmed_at: "2026-01-01T00:00:00Z",
+      }),
+    ).resolves.toBe(true);
   });
 
   it("keeps free and expired accounts locked, and active or unexpired cancelled Pro active", () => {

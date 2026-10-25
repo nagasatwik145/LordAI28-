@@ -14,6 +14,7 @@ import {
   Settings,
   Scale,
   Target,
+  HeartPulse,
 } from "lucide-react";
 
 /** Shared destinations used by the desktop dock and mobile navigation. */
@@ -31,6 +32,7 @@ export const APP_NAVIGATION = [
   { to: "/tasks", label: "Tasks & Notifications", icon: Target },
   { to: "/documents", label: "Documents", icon: FileText },
   { to: "/statistics", label: "Statistics", icon: BarChart3 },
+  { to: "/observability", label: "Health Center", icon: HeartPulse },
   { to: "/upgrade", label: "LORD Pro", icon: Crown },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;

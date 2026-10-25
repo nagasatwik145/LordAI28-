@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   createGameRecord,
+  filterGamesForEntitlement,
   hasThreeDimensionalGameSpec,
   isThreeDimensionalGameSpec,
   ownedGamesQuery,
+  requiresGameProAccess,
   scopeGameToOwner,
   updateGameGeneration,
   type PersistedGame,
@@ -57,6 +59,24 @@ describe("Create Apka Jalwa persistence", () => {
     expect(isThreeDimensionalGameSpec(null)).toBe(false);
     expect(hasThreeDimensionalGameSpec([{ schemaVersion: 2 }, { schemaVersion: 3 }])).toBe(true);
     expect(hasThreeDimensionalGameSpec([{ schemaVersion: 2 }])).toBe(false);
+  });
+
+  it("requires Pro for 3D game content in current specs and version history", () => {
+    expect(requiresGameProAccess({ spec: { schemaVersion: 3 }, versions: [] })).toBe(true);
+    expect(requiresGameProAccess({ spec: { schemaVersion: 2 }, versions: [{ dimension: "3d" }] })).toBe(
+      true,
+    );
+    expect(requiresGameProAccess({ spec: { schemaVersion: 2 }, versions: [] })).toBe(false);
+  });
+
+  it("hides saved 3D content from users without Pro without hiding their 2D games", () => {
+    const games = [
+      { id: "2d", spec: { schemaVersion: 2 }, versions: [] },
+      { id: "3d", spec: { schemaVersion: 3 }, versions: [] },
+    ];
+
+    expect(filterGamesForEntitlement(games, false).map(({ id }) => id)).toEqual(["2d"]);
+    expect(filterGamesForEntitlement(games, true)).toEqual(games);
   });
 
   it("creates an owned pending record before generation and returns its ID", async () => {
@@ -153,13 +173,14 @@ describe("Create Apka Jalwa persistence", () => {
   });
 
   it("does not return success when record persistence fails", async () => {
-    const { db } = fakeDb({ data: null, error: new Error("RLS denied") });
+    const databaseFailure = { code: "42501", message: "RLS denied" };
+    const { db } = fakeDb({ data: null, error: databaseFailure });
 
     await expect(
       createGameRecord(db, {
         userId: "user-abc",
         prompt: "A real game idea",
       }),
-    ).rejects.toMatchObject({ kind: "database" });
+    ).rejects.toMatchObject({ kind: "database", cause: databaseFailure });
   });
 });

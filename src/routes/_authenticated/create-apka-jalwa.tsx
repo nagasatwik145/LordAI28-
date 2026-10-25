@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
@@ -22,9 +23,13 @@ import type { GeneratedGameSpec } from "@/lib/games/game-runtime";
 import { ThreeGamePreview } from "@/lib/games/engines/3d/ThreeGamePreview";
 import { createGameZip } from "@/lib/games/game-export";
 import { requestGamesApi, SingleFlightGate } from "@/lib/games/game-api-client";
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
+import { z } from "zod";
+
+const ProStatusSchema = z.object({
+  pro: z.boolean(),
+  pricing: z.object({ monthly: z.number(), yearly: z.number() }),
+});
 
 type SavedGame = {
   id: string;
@@ -51,11 +56,18 @@ export const Route = createFileRoute("/_authenticated/create-apka-jalwa")({
 });
 
 function GameStudio() {
-  const proQuery = useQuery({ queryKey: ["pro-entitlement"], queryFn: async () => {
-    const response = await authenticatedFetch("/api/billing/status");
-    if (!response.ok) throw new Error("Could not verify your plan.");
-    return response.json() as Promise<{ pro: boolean; lifetime: boolean; pricing: { monthly: number; yearly: number } }>;
-  } });
+  const proQuery = useQuery({
+    queryKey: ["pro-entitlement"],
+    queryFn: async () => {
+      const response = await authenticatedFetch("/api/billing/status");
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new Error("Could not verify your LORD Pro access.");
+      const parsed = ProStatusSchema.safeParse(payload);
+      if (!parsed.success) throw new Error("LORD returned an invalid Pro status response.");
+      return parsed.data;
+    },
+    retry: false,
+  });
   const [prompt, setPrompt] = useState("");
   const [difficulty, setDifficulty] = useState<GameSpec["difficulty"]>("normal");
   const [dimension, setDimension] = useState<"2d" | "3d">("2d");
@@ -242,9 +254,37 @@ function GameStudio() {
                     className="mb-3 h-10 w-full rounded-lg border border-white/10 bg-[#101c2d] px-3 text-sm text-white"
                   >
                     <option value="2d">2D · Canvas games</option>
-                    <option value="3d" disabled={!proQuery.data?.pro}>3D · WebGL / Three.js{!proQuery.data?.pro ? " · Pro" : ""}</option>
+                    <option value="3d" disabled={!proQuery.data?.pro}>
+                      3D · WebGL / Three.js{!proQuery.data?.pro ? " · Pro" : ""}
+                    </option>
                   </select>
-                  {!proQuery.data?.pro && <Link to="/upgrade" className="mb-3 inline-flex flex-wrap rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs font-medium text-cyan-100">Unlock 3D games with LORD Pro{proQuery.data?.pricing ? ` · ₹${proQuery.data.pricing.monthly}/month · ₹${proQuery.data.pricing.yearly}/year` : ""} →</Link>}
+                  {proQuery.isError ? (
+                    <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-amber-100">
+                      <span>Could not verify Pro access; 3D games remain locked.</span>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-cyan-200"
+                        onClick={() => void proQuery.refetch()}
+                        disabled={proQuery.isFetching}
+                      >
+                        {proQuery.isFetching ? "Checking…" : "Retry"}
+                      </Button>
+                    </div>
+                  ) : (
+                    !proQuery.data?.pro && (
+                      <Link
+                        to="/upgrade"
+                        className="mb-3 inline-flex flex-wrap rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs font-medium text-cyan-100"
+                      >
+                        Unlock 3D games with LORD Pro
+                        {proQuery.data?.pricing
+                          ? ` · ₹${proQuery.data.pricing.monthly}/month · ₹${proQuery.data.pricing.yearly}/year`
+                          : ""}{" "}
+                        →
+                      </Link>
+                    )
+                  )}
                   <Label htmlFor="difficulty" className="mb-2 block text-xs text-slate-400">
                     Difficulty
                   </Label>

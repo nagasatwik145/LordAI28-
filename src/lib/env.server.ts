@@ -47,8 +47,6 @@ const CLIENT_LEAK_ENV_KEYS = [
 export interface EnvKeySummary {
   name: string;
   exists: boolean;
-  /** First 8 characters only — never the full secret. */
-  first8?: string;
   length: number;
 }
 
@@ -95,12 +93,11 @@ export function normalizeEnvValue(raw: string | undefined): string | undefined {
   return value;
 }
 
-/** Summarize a secret: existence, first 8 characters, and length. Nothing else. */
+/** Summarize a secret without including any portion of its value. */
 export function summarizeSecret(value: string | undefined, name = "value"): EnvKeySummary {
   return {
     name,
     exists: !!value && value.length > 0,
-    first8: value ? value.slice(0, 8) : undefined,
     length: value?.length ?? 0,
   };
 }

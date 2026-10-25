@@ -35,6 +35,8 @@ import {
   Brain,
   ShieldCheck,
   ShieldOff,
+  Eye,
+  EyeOff,
   User,
   Mail,
   Fingerprint,
@@ -59,6 +61,8 @@ import {
   type ImageSizePreset,
 } from "@/lib/image-settings";
 import { IMAGE_MODEL_REGISTRY, DEFAULT_IMAGE_MODEL_ID } from "@/lib/ai/image";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "LORD — Settings" }] }),
@@ -222,6 +226,14 @@ function SettingsPage() {
   const { user } = Route.useRouteContext();
 
   const { latest: latestUsage } = useTokenUsage();
+  const { data: analyticsConsent, refetch: refetchAnalyticsConsent } = useQuery({
+    queryKey: ["analytics-consent"],
+    queryFn: async () => {
+      const response = await authenticatedFetch("/api/analytics/consent");
+      if (!response.ok) throw new Error("Could not load analytics preference.");
+      return (await response.json() as { enabled: boolean }).enabled;
+    },
+  });
 
   const [defaultMode, setDefaultMode] = useState("balanced");
   const [voiceRate, setVoiceRate] = useState(1);
@@ -682,7 +694,7 @@ function SettingsPage() {
               icon={Brain}
               title="Memory"
               subtitle="Control what LORD remembers about you"
-              summary={`${memories.length} memories · ${memorySettings?.memory_enabled === false ? "off" : "on"}`}
+              summary={`${memories.length} memories · ${memorySettings?.memory_enabled === false ? "off" : memorySettings?.personalization_enabled === false ? "personalization paused" : "on"}`}
             >
               <div className="relative">
                 <p className="text-xs text-muted-foreground">
@@ -699,10 +711,18 @@ function SettingsPage() {
                 <div className="relative mt-4 space-y-3">
                   <SettingsToggle
                     icon={memorySettings?.memory_enabled === false ? ShieldOff : ShieldCheck}
-                    label="Memory"
-                    description="Let LORD remember things across chats"
+                    label="Memory collection"
+                    description="Allow LORD to save new memories from chats or manual entry"
                     checked={memorySettings?.memory_enabled ?? true}
                     onChange={(v) => setMemorySetting({ memory_enabled: v })}
+                  />
+                  <SettingsToggle
+                    icon={memorySettings?.personalization_enabled === false ? EyeOff : Eye}
+                    label="Use memories in chat"
+                    description="Pause or resume relevant saved memories in your chat context"
+                    checked={memorySettings?.personalization_enabled ?? true}
+                    disabled={memorySettings?.memory_enabled === false}
+                    onChange={(v) => setMemorySetting({ personalization_enabled: v })}
                   />
                   <SettingsToggle
                     icon={Brain}
@@ -721,6 +741,12 @@ function SettingsPage() {
                     onChange={(v) => setMemorySetting({ ask_before_save: v })}
                   />
                 </div>
+
+                <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
+                  Deleting memories removes them from LORD&apos;s active memory and personalization,
+                  but not from source conversations. Provider backups may retain data under their
+                  retention policies.
+                </p>
 
                 <div className="relative mt-5 flex flex-wrap gap-3 border-t border-border/30 pt-4">
                   <motion.button
@@ -902,6 +928,17 @@ function SettingsPage() {
               summary="2 actions available"
             >
               <div className="relative mt-0 flex flex-wrap gap-3">
+                <div className="flex w-full items-center justify-between gap-4 rounded-lg border border-border/50 p-4">
+                  <div>
+                    <p className="text-sm font-medium">Share anonymous product analytics</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Optional usage events only. LORD never records messages, notes, credentials, or API keys. Turning this off deletes your analytics events.</p>
+                  </div>
+                  <SettingsToggle icon={Activity} checked={analyticsConsent ?? false} label="Share anonymous product analytics" description="Opt in to minimized product usage events." onChange={async (enabled) => {
+                    const response = await authenticatedFetch("/api/analytics/consent", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) });
+                    if (!response.ok) { toast.error("Could not save analytics preference."); return; }
+                    await refetchAnalyticsConsent();
+                  }} />
+                </div>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}

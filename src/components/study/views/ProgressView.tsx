@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import React from "react";
 import { motion } from "framer-motion";
 import {
@@ -36,7 +36,11 @@ import { EmptyState } from "../ui/EmptyState";
 import { LearningJourney } from "../ui/LearningJourney";
 import { getLearnerStats } from "@/lib/learning/gamification";
 import { buildLearningJourney } from "@/lib/learning/journey";
-import { getFocusRecords, type FocusRecord } from "@/lib/learning/focus-sessions";
+import {
+  listFocusSessions,
+  summarizeFocusSessions,
+  type FocusSessionRecord,
+} from "@/lib/learning/focus-sessions";
 import { filterConceptsForClass } from "@/lib/learning/class";
 import type { LearningSnapshot, StudyView } from "../types";
 
@@ -49,20 +53,33 @@ interface ProgressViewProps {
 }
 
 export function ProgressView({ snapshot, userId, onNavigate, onBack, refresh }: ProgressViewProps) {
-  const [focusRecords, setFocusRecords] = useState<FocusRecord[]>(() =>
-    userId ? getFocusRecords(userId) : [],
-  );
+  const [focusRecords, setFocusRecords] = useState<FocusSessionRecord[]>([]);
+  const [focusLoading, setFocusLoading] = useState(true);
+  const [focusError, setFocusError] = useState<string | null>(null);
+  const loadFocusRecords = useCallback(async () => {
+    if (!userId) return;
+    setFocusLoading(true);
+    setFocusError(null);
+    try {
+      setFocusRecords(await listFocusSessions());
+    } catch (error) {
+      setFocusError(error instanceof Error ? error.message : "Could not load focus analytics.");
+    } finally {
+      setFocusLoading(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
     if (!userId) return;
-    setFocusRecords(getFocusRecords(userId));
+    void loadFocusRecords();
     const update = (event: Event) => {
       if ((event as CustomEvent<{ userId?: string }>).detail?.userId === userId) {
-        setFocusRecords(getFocusRecords(userId));
+        void loadFocusRecords();
       }
     };
     window.addEventListener("lord:focus-session-complete", update);
     return () => window.removeEventListener("lord:focus-session-complete", update);
-  }, [userId]);
+  }, [loadFocusRecords, userId]);
   if (!snapshot || !userId) {
     return (
       <div className="p-6">
@@ -99,14 +116,21 @@ export function ProgressView({ snapshot, userId, onNavigate, onBack, refresh }: 
   const avgScore = totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : 0;
 
   const totalStudyTime = analytics?.reduce((sum, a) => sum + (a.study_time_seconds ?? 0), 0) ?? 0;
-  const focusMinutes = focusRecords.reduce((sum, item) => sum + item.minutes, 0);
+  const focusSummary = summarizeFocusSessions(focusRecords);
+  const focusMinutes = Math.floor(
+    focusRecords
+      .filter((record) => record.status === "completed")
+      .reduce((sum, item) => sum + item.duration_seconds, 0) / 60,
+  );
   const totalStudyMinutes = Math.floor(totalStudyTime / 60) + focusMinutes;
 
   let streak = 0;
   const cursor = new Date();
   const activeDays = new Set([
     ...[...sessions, ...attempts].map((item) => new Date(item.created_at).toDateString()),
-    ...focusRecords.map((item) => new Date(item.completedAt).toDateString()),
+    ...focusRecords
+      .filter((item) => item.status === "completed")
+      .map((item) => new Date(item.completed_at).toDateString()),
   ]);
   if (!activeDays.has(cursor.toDateString())) cursor.setDate(cursor.getDate() - 1);
   while (activeDays.has(cursor.toDateString())) {
@@ -206,6 +230,89 @@ export function ProgressView({ snapshot, userId, onNavigate, onBack, refresh }: 
           delay={3}
         />
       </motion.section>
+
+      <section className="mb-8 rounded-2xl border border-primary/20 bg-card/50 p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg font-semibold text-foreground">Study Focus</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Focused timer time only; Pomodoro breaks and interrupted sessions are excluded.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("lord:open-focus-session"))}
+            className="inline-flex min-h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Start a focus session
+          </button>
+        </div>
+
+        {focusLoading ? (
+          <p role="status" className="mt-5 text-sm text-muted-foreground">
+            Loading persisted study sessions…
+          </p>
+        ) : focusError ? (
+          <div
+            role="alert"
+            className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm"
+          >
+            <span>{focusError}</span>
+            <button
+              type="button"
+              onClick={() => void loadFocusRecords()}
+              className="ml-2 underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : focusSummary.completedSessions === 0 ? (
+          <p className="mt-5 rounded-lg border border-border/50 bg-background/50 p-4 text-sm text-muted-foreground">
+            No completed focus sessions yet. Start a timer when you are ready; your first session
+            will appear here.
+          </p>
+        ) : (
+          <>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <FocusMetric label="Today" value={formatFocusTime(focusSummary.todaySeconds)} />
+              <FocusMetric label="This week" value={formatFocusTime(focusSummary.weekSeconds)} />
+              <FocusMetric
+                label="Completed sessions"
+                value={String(focusSummary.completedSessions)}
+              />
+              <FocusMetric label="Current study streak" value={`${focusSummary.streakDays} days`} />
+            </div>
+            {focusSummary.subjectSeconds.length > 0 && (
+              <div className="mt-5">
+                <h4 className="text-sm font-medium">Focused time by subject</h4>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {focusSummary.subjectSeconds.map(({ subject, seconds }) => (
+                    <span
+                      key={subject}
+                      className="rounded-full border border-border/60 bg-background/60 px-3 py-1.5 text-xs"
+                    >
+                      {subject} · {formatFocusTime(seconds)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mt-5">
+              <h4 className="text-sm font-medium">Recent study days</h4>
+              <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Recent focus history">
+                {getRecentFocusDays(focusSummary.dailySeconds).map(({ date, seconds }) => (
+                  <span
+                    key={date}
+                    title={`${date}: ${formatFocusTime(seconds)} focused`}
+                    aria-label={`${date}: ${formatFocusTime(seconds)} focused`}
+                    className={`h-6 w-6 rounded-sm ${seconds > 0 ? "bg-primary/70" : "bg-muted/40"}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </section>
 
       {learnerStats && (
         <motion.section
@@ -478,6 +585,34 @@ export function ProgressView({ snapshot, userId, onNavigate, onBack, refresh }: 
           </motion.section>
         )}
       </div>
+    </div>
+  );
+}
+
+function formatFocusTime(seconds: number): string {
+  const wholeMinutes = Math.floor(seconds / 60);
+  const hours = Math.floor(wholeMinutes / 60);
+  const minutes = wholeMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${wholeMinutes}m`;
+}
+
+function getRecentFocusDays(dailySeconds: Array<{ date: string; seconds: number }>) {
+  const byDate = new Map(dailySeconds.map((item) => [item.date, item.seconds]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Array.from({ length: 28 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (27 - index));
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return { date: key, seconds: byDate.get(key) ?? 0 };
+  });
+}
+
+function FocusMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border/50 bg-background/50 p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
     </div>
   );
 }

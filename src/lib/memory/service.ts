@@ -153,6 +153,29 @@ export function useAddMemory(userId: string | null | undefined) {
       if (!content) throw new Error("Memory cannot be empty");
       if (isSensitive(content)) throw new Error("That looks like a secret. Not saved.");
 
+      let projectId = input.projectId ?? null;
+      if (!projectId && input.sourceConversationId) {
+        const { data: conversation, error: conversationError } = await supabase
+          .from("conversations")
+          .select("project_id")
+          .eq("id", input.sourceConversationId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (conversationError) throw conversationError;
+        projectId = conversation?.project_id ?? null;
+      }
+
+      let existingQuery = supabase.from("memories").select("*").eq("user_id", userId);
+      existingQuery = projectId
+        ? existingQuery.eq("project_id", projectId)
+        : existingQuery.is("project_id", null);
+      const { data: existingMemories, error: existingError } = await existingQuery;
+      if (existingError) throw existingError;
+      const duplicate = ((existingMemories ?? []) as DbMemoryRow[]).find((memory) =>
+        arePossibleDuplicates(memory.content, content),
+      );
+      if (duplicate) return rowToMemory(duplicate);
+
       let embedding: number[] | null = null;
       try {
         embedding = (await embed(content)).vector;
@@ -171,7 +194,7 @@ export function useAddMemory(userId: string | null | undefined) {
         embedding,
         expires_at: input.expiresAt ?? null,
         client_tag: tag,
-        project_id: input.projectId ?? null,
+        project_id: projectId,
         source_conversation_id: input.sourceConversationId ?? null,
         confirmation_status:
           input.confirmationStatus ?? (input.source === "auto" ? "suggested" : "confirmed"),
@@ -216,10 +239,10 @@ export function useAddMemory(userId: string | null | undefined) {
         qc.setQueryData(MEMORIES_KEY(userId), context.previous);
       }
     },
-    onSuccess: (saved) => {
+    onSuccess: (saved, _input, context) => {
       if (!userId) return;
       patchMemoriesCache(qc, userId, (old) =>
-        old.map((m) => (m.id.startsWith("temp-") ? saved : m)),
+        old.map((m) => (m.id === context?.optimisticId ? saved : m)),
       );
     },
     onSettled: () => {
@@ -240,8 +263,8 @@ export function useSaveDetectedMemory(userId: string | null | undefined) {
         source: "auto",
         expiresAt: detected.expiresAt,
         sourceConversationId: detected.sourceConversationId,
-        confirmationStatus: "suggested",
-        useInContext: false,
+        confirmationStatus: "confirmed",
+        useInContext: true,
       }),
   });
 }
@@ -271,6 +294,13 @@ export function useUpdateMemory(userId: string | null | undefined) {
       const update: Database["public"]["Tables"]["memories"]["Update"] = {
         client_tag: tag,
         ...(input.content !== undefined ? { content: input.content.trim() } : {}),
+        ...(input.content !== undefined
+          ? {
+              embedding: await embed(input.content.trim())
+                .then((result) => result.vector)
+                .catch(() => null),
+            }
+          : {}),
         ...(input.category !== undefined ? { category: input.category } : {}),
         ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
         ...(input.archived !== undefined ? { archived: input.archived } : {}),
@@ -416,6 +446,14 @@ export function useUpdateMemorySettings(userId: string | null | undefined) {
 
 // ---- Dedup helper ----------------------------------------------------------
 /** True if an equivalent memory (same content, roughly) already exists. */
-export function memoryExists(memories: MemoryRecord[], content: string): boolean {
-  return memories.some((memory) => arePossibleDuplicates(memory.content, content));
+export function memoryExists(
+  memories: MemoryRecord[],
+  content: string,
+  projectId?: string | null,
+): boolean {
+  return memories.some(
+    (memory) =>
+      (projectId ? !memory.project_id || memory.project_id === projectId : !memory.project_id) &&
+      arePossibleDuplicates(memory.content, content),
+  );
 }

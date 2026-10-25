@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crown, Sparkles, Mic2, Box } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/lord/AppShell";
 import { Button } from "@/components/ui/button";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
+import { z } from "zod";
 
 type RazorpayResult = {
   razorpay_payment_id: string;
@@ -27,9 +28,13 @@ declare global {
   }
 }
 
-export const Route = createFileRoute("/_authenticated/upgrade")({ component: UpgradePage });
+export const Route = createFileRoute("/_authenticated/upgrade")({
+  validateSearch: z.object({ phonepeOrder: z.string().optional() }),
+  component: UpgradePage,
+});
 
 function UpgradePage() {
+  const { phonepeOrder } = Route.useSearch();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const queryClient = useQueryClient();
@@ -40,11 +45,34 @@ function UpgradePage() {
       if (!response.ok) throw new Error("Could not load plan status.");
       return response.json() as Promise<{
         pro: boolean;
+        enabled: boolean;
         lifetime: boolean;
+        phonepeAvailable: boolean;
         pricing: { monthly: number; yearly: number };
       }>;
     },
   });
+  const { data: phonepePayment, error: phonepeStatusError } = useQuery({
+    queryKey: ["phonepe-order", phonepeOrder],
+    enabled: Boolean(phonepeOrder),
+    refetchInterval: (query) =>
+      phonepeOrder && query.state.data?.status === "pending" ? 3000 : false,
+    queryFn: async () => {
+      const response = await authenticatedFetch(
+        `/api/billing/phonepe?merchantOrderId=${encodeURIComponent(phonepeOrder!)}`,
+      );
+      const result = (await response.json()) as { status?: string; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Could not verify PhonePe payment.");
+      return result;
+    },
+  });
+
+  useEffect(() => {
+    if (phonepePayment?.status === "paid") {
+      void queryClient.invalidateQueries({ queryKey: ["pro-entitlement"] });
+    }
+  }, [phonepePayment?.status, queryClient]);
+
   const loadCheckout = async () => {
     if (window.Razorpay) return;
     await new Promise<void>((resolve, reject) => {
@@ -105,6 +133,24 @@ function UpgradePage() {
       setBusy(null);
     }
   };
+  const payWithPhonePe = async (plan: "monthly" | "yearly") => {
+    setBusy(`phonepe-${plan}`);
+    setError("");
+    try {
+      const response = await authenticatedFetch("/api/billing/phonepe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const result = (await response.json()) as { checkoutUrl?: string; error?: string };
+      if (!response.ok || !result.checkoutUrl)
+        throw new Error(result.error ?? "Could not start PhonePe checkout.");
+      window.location.assign(result.checkoutUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "PhonePe checkout is unavailable.");
+      setBusy(null);
+    }
+  };
   return (
     <AppShell>
       <main className="mx-auto max-w-5xl py-8 sm:py-14">
@@ -116,11 +162,11 @@ function UpgradePage() {
                 <Sparkles className="h-3.5 w-3.5" /> LORD Pro
               </p>
               <h1 className="font-display text-3xl font-semibold sm:text-5xl">
-                Unlock your full potential.
+                Upgrade to LORD Pro.
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                Talk naturally with LORD and turn your ideas into immersive 3D games, with every Pro
-                feature in one plan.
+                Unlock expanded model access, Fast Reply Mode, and LORD Autopilot. Voice
+                conversations and 3D game creation remain free for everyone.
               </p>
               {status?.pro && (
                 <p className="mt-4 text-sm font-medium text-emerald-300">
@@ -133,6 +179,35 @@ function UpgradePage() {
             <Crown className="hidden h-20 w-20 text-cyan-200 md:block" />
           </div>
         </section>
+        {status?.enabled === false && (
+          <p className="mt-5 rounded-xl border border-amber-300/20 bg-amber-200/5 p-4 text-sm text-amber-100">
+            LORD Pro-exclusive features and new subscriptions are temporarily unavailable. Voice and
+            3D game creation remain free.
+          </p>
+        )}
+        {phonepeOrder && (
+          <p
+            role="status"
+            className={`mt-5 rounded-xl border p-4 text-sm ${
+              phonepePayment?.status === "paid"
+                ? "border-emerald-300/20 bg-emerald-200/5 text-emerald-100"
+                : phonepePayment?.status === "failed"
+                  ? "border-rose-300/20 bg-rose-200/5 text-rose-100"
+                  : "border-cyan-300/20 bg-cyan-200/5 text-cyan-100"
+            }`}
+          >
+            {phonepePayment?.status === "paid"
+              ? "PhonePe payment confirmed. LORD Pro is active."
+              : phonepePayment?.status === "failed"
+                ? "PhonePe could not complete the payment. You can try checkout again."
+                : "Checking PhonePe payment status…"}
+          </p>
+        )}
+        {phonepeOrder && phonepeStatusError instanceof Error && (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {phonepeStatusError.message}
+          </p>
+        )}
         <section className="mt-8 grid gap-4 sm:grid-cols-3">
           <article className="rounded-2xl border border-border bg-card/70 p-6">
             <p className="text-sm text-muted-foreground">Free</p>
@@ -140,7 +215,8 @@ function UpgradePage() {
             <p className="mt-2 text-sm text-muted-foreground">Core LORD AI features</p>
             <ul className="mt-6 space-y-3 text-sm">
               <Feature>Chat and everyday tools</Feature>
-              <Feature>2D game creation</Feature>
+              <Feature>2D and 3D game creation</Feature>
+              <Feature>Voice interactions</Feature>
               <Feature>Personal workspace</Feature>
             </ul>
           </article>
@@ -150,7 +226,12 @@ function UpgradePage() {
             suffix="/month"
             onChoose={() => void subscribe("monthly")}
             busy={busy === "monthly"}
-            disabled={Boolean(status?.pro)}
+            checkingOut={Boolean(busy)}
+            disabled={status?.enabled !== true || Boolean(status.pro)}
+            unavailable={status?.enabled === false}
+            onPhonePe={() => void payWithPhonePe("monthly")}
+            phonePeBusy={busy === "phonepe-monthly"}
+            phonePeUnavailable={!status?.phonepeAvailable}
           />
           <PlanCard
             title="LORD Pro Yearly"
@@ -159,11 +240,16 @@ function UpgradePage() {
             featured
             onChoose={() => void subscribe("yearly")}
             busy={busy === "yearly"}
-            disabled={Boolean(status?.pro)}
+            checkingOut={Boolean(busy)}
+            disabled={status?.enabled !== true || Boolean(status.pro)}
+            unavailable={status?.enabled === false}
+            onPhonePe={() => void payWithPhonePe("yearly")}
+            phonePeBusy={busy === "phonepe-yearly"}
+            phonePeUnavailable={!status?.phonepeAvailable}
           />
         </section>
         <section className="mt-7 rounded-2xl border border-border bg-card/50 p-5 sm:p-7">
-          <h2 className="text-lg font-semibold">Included with Pro</h2>
+          <h2 className="text-lg font-semibold">Available to everyone</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className="flex gap-3">
               <Mic2 className="h-5 w-5 shrink-0 text-cyan-300" />
@@ -191,8 +277,8 @@ function UpgradePage() {
           </p>
         )}
         <p className="mt-5 text-center text-xs text-muted-foreground">
-          Payments are being set up in Razorpay test mode. Subscriptions activate after the server
-          verifies the payment webhook.
+          Razorpay subscriptions support UPI apps such as Google Pay when enabled for your merchant
+          account. PhonePe checkout is a one-time payment and grants the selected plan period.
         </p>
       </main>
     </AppShell>
@@ -213,16 +299,26 @@ function PlanCard({
   suffix,
   featured,
   busy,
+  checkingOut,
   disabled,
+  unavailable,
   onChoose,
+  onPhonePe,
+  phonePeBusy,
+  phonePeUnavailable,
 }: {
   title: string;
   price: string;
   suffix: string;
   featured?: boolean;
   busy: boolean;
+  checkingOut: boolean;
   disabled: boolean;
+  unavailable: boolean;
   onChoose: () => void;
+  onPhonePe: () => void;
+  phonePeBusy: boolean;
+  phonePeUnavailable: boolean;
 }) {
   return (
     <article
@@ -238,19 +334,39 @@ function PlanCard({
         {price}
         <span className="text-sm font-normal text-muted-foreground">{suffix}</span>
       </p>
-      <p className="mt-2 text-sm text-muted-foreground">Full access to every Pro feature</p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Get more from LORD AI with expanded access to powerful features.
+      </p>
       <ul className="my-6 space-y-3 text-sm">
-        <Feature>Premium voice interactions</Feature>
-        <Feature>3D game creation and access</Feature>
-        <Feature>Unlimited Pro usage</Feature>
+        <Feature>Expanded model access</Feature>
+        <Feature>Fast Reply Mode</Feature>
+        <Feature>LORD Autopilot</Feature>
       </ul>
       <Button
         className="w-full"
         variant={featured ? "default" : "outline"}
         onClick={onChoose}
-        disabled={disabled || busy}
+        disabled={disabled || checkingOut}
       >
-        {busy ? "Opening checkout…" : disabled ? "Pro is active" : "Upgrade"}
+        {busy
+          ? "Opening checkout…"
+          : unavailable
+            ? "Temporarily unavailable"
+            : disabled
+              ? "Pro is active"
+              : "Subscribe with Razorpay"}
+      </Button>
+      <Button
+        className="mt-2 w-full"
+        variant="ghost"
+        onClick={onPhonePe}
+        disabled={disabled || checkingOut || phonePeUnavailable}
+      >
+        {phonePeBusy
+          ? "Opening PhonePe…"
+          : phonePeUnavailable
+            ? "PhonePe unavailable"
+            : "Pay once with PhonePe"}
       </Button>
     </article>
   );

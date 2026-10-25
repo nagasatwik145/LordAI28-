@@ -115,9 +115,7 @@ export const requireSupabaseRequestAuth = createMiddleware({ type: "request" }).
     console.info(JSON.stringify({ event: "auth_start", message: "AUTH START", path }));
     try {
       const authContext = await getAuthenticatedSupabase(request);
-      console.info(
-        JSON.stringify({ event: "auth_ok", message: "AUTH OK", path, userId: authContext.userId }),
-      );
+      console.info(JSON.stringify({ event: "auth_ok", message: "AUTH OK", path }));
       return next({
         context: authContext,
       });

@@ -33,6 +33,7 @@ function PlayableThreeGamePreview({ spec }: { spec: Game3DSpec }) {
   const handleRef = useRef<Game3DHandle | null>(null);
   const [state, setState] = useState<Game3DStatus>({ status: "ready", hud: "Loading 3D scene…" });
   const [error, setError] = useState("");
+  const [runtimeReady, setRuntimeReady] = useState(false);
   const [restartToken, setRestartToken] = useState(0);
   const [quality, setQuality] = useState<GraphicsQuality>("medium");
   const [fightingProgress, setFightingProgress] = useState<FightingProgress | undefined>();
@@ -43,6 +44,7 @@ function PlayableThreeGamePreview({ spec }: { spec: Game3DSpec }) {
     if (!host) return;
     let mounted = true;
     setError("");
+    setRuntimeReady(false);
     setState({ status: "ready", hud: "Loading Three.js scene…" });
     mountThreeGame(
       host,
@@ -64,6 +66,7 @@ function PlayableThreeGamePreview({ spec }: { spec: Game3DSpec }) {
           return;
         }
         handleRef.current = handle;
+        setRuntimeReady(true);
       })
       .catch((reason: unknown) => {
         if (!mounted) return;
@@ -248,6 +251,22 @@ function PlayableThreeGamePreview({ spec }: { spec: Game3DSpec }) {
               </span>
             </div>
           )}
+        {runtimeReady && state.status === "ready" && !error && (
+          <div className="absolute inset-0 z-10 grid place-items-center bg-slate-950/65 p-5 text-center backdrop-blur-[2px]">
+            <div className="max-w-lg rounded-2xl border border-cyan-200/20 bg-slate-950/90 p-5 shadow-2xl">
+              <strong className="text-base text-cyan-100">Ready to play</strong>
+              <p className="mt-2 text-sm text-white/85">{spec.objective}</p>
+              <p className="mt-2 text-xs text-white/60">{spec.coreLoop}</p>
+              <p className="mt-2 text-xs text-white/60">{spec.controls.join(" · ")}</p>
+              <button
+                className="mt-4 min-h-11 rounded-xl bg-cyan-300 px-5 font-bold text-slate-950 hover:bg-cyan-200"
+                onClick={() => handleRef.current?.start()}
+              >
+                Start game
+              </button>
+            </div>
+          </div>
+        )}
         <div className="pointer-events-none absolute bottom-3 left-1/2 hidden -translate-x-1/2 rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-[10px] text-white/70 backdrop-blur sm:block">
           {spec.controls.join(" · ")}
         </div>

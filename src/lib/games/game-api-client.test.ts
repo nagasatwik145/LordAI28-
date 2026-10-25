@@ -38,6 +38,19 @@ describe("game API errors", () => {
     await expect(requestGamesApi({ action: "generate" })).rejects.toThrow(/generation failed/i);
   });
 
+  it("surfaces server-enforced Pro restrictions for 3D games", async () => {
+    authenticatedFetchMock.mockResolvedValue(
+      Response.json(
+        { error: { code: "PRO_REQUIRED", message: "LORD Pro is required for 3D games." } },
+        { status: 403 },
+      ),
+    );
+
+    await expect(requestGamesApi({ action: "generate", dimension: "3d" })).rejects.toThrow(
+      /Pro is required/i,
+    );
+  });
+
   it("gives actionable guidance for provider rate limits and timeouts", async () => {
     authenticatedFetchMock.mockResolvedValueOnce(
       Response.json({ error: { code: "AI_RATE_LIMITED" } }, { status: 429 }),

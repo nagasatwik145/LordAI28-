@@ -101,6 +101,38 @@ describe("WebSpeechWakeEngine", () => {
     expect(interrupted).toHaveBeenCalledOnce();
     await engine.stop();
   });
+
+  it("ignores an end callback from a session stopped before a new start", async () => {
+    vi.useFakeTimers();
+    const recognizers: FakeRecognition[] = [];
+    class FakeRecognition implements SpeechRecognitionLike {
+      continuous = false;
+      interimResults = false;
+      lang = "";
+      onresult: SpeechRecognitionLike["onresult"] = null;
+      onend: SpeechRecognitionLike["onend"] = null;
+      onerror: SpeechRecognitionLike["onerror"] = null;
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      constructor() {
+        recognizers.push(this);
+      }
+    }
+    vi.stubGlobal("window", { SpeechRecognition: FakeRecognition });
+
+    const engine = new WebSpeechWakeEngine();
+    await engine.start(vi.fn());
+    const oldRecognition = recognizers[0];
+    await engine.stop();
+    await engine.start(vi.fn());
+    oldRecognition.onend?.();
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(recognizers).toHaveLength(2);
+    expect(recognizers[1].start).toHaveBeenCalledOnce();
+    await engine.stop();
+  });
 });
 
 type FakeRecognition = SpeechRecognitionLike & {

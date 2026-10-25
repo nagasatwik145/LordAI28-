@@ -23,6 +23,19 @@ export function hasThreeDimensionalGameSpec(values: readonly unknown[]): boolean
   return values.some(isThreeDimensionalGameSpec);
 }
 
+export function requiresGameProAccess(game: {
+  spec: unknown;
+  versions?: readonly unknown[];
+}): boolean {
+  return isThreeDimensionalGameSpec(game.spec) || hasThreeDimensionalGameSpec(game.versions ?? []);
+}
+
+export function filterGamesForEntitlement<
+  T extends { spec: unknown; versions: readonly unknown[] },
+>(games: readonly T[], hasPro: boolean): T[] {
+  return hasPro ? [...games] : games.filter((game) => !requiresGameProAccess(game));
+}
+
 export type GameRecordQuery = {
   select(columns: string): GameRecordQuery;
   eq(column: string, value: string): GameRecordQuery;
@@ -47,9 +60,11 @@ export class GameServiceError extends Error {
       | "timeout"
       | "unsupported",
     message: string,
+    cause?: unknown,
   ) {
     super(message);
     this.name = "GameServiceError";
+    if (cause !== undefined) this.cause = cause;
   }
 }
 
@@ -91,23 +106,20 @@ export async function createGameRecord(
         .eq("user_id", input.userId)
         .eq("idempotency_key", input.idempotencyKey)
         .maybeSingle();
-      if (lookupError) throw new GameServiceError("database", "The game record could not be loaded.");
+      if (lookupError)
+        throw new GameServiceError("database", "The game record could not be loaded.", lookupError);
       if (existing) return existing;
     }
 
     const values: Record<string, unknown> = {
-        user_id: input.userId,
-        spec: null,
-        prompt: input.prompt,
-        versions: [],
-        status: "pending",
-      };
+      user_id: input.userId,
+      spec: null,
+      prompt: input.prompt,
+      versions: [],
+      status: "pending",
+    };
     if (input.idempotencyKey) values.idempotency_key = input.idempotencyKey;
-    const { data, error } = await db
-      .from("ai_games")
-      .insert(values)
-      .select(GAME_COLUMNS)
-      .single();
+    const { data, error } = await db.from("ai_games").insert(values).select(GAME_COLUMNS).single();
     if (error || !data?.id) {
       if (input.idempotencyKey) {
         const { data: existing, error: lookupError } = await db
@@ -118,12 +130,12 @@ export async function createGameRecord(
           .maybeSingle();
         if (!lookupError && existing) return existing;
       }
-      throw new GameServiceError("database", "The game record could not be created.");
+      throw new GameServiceError("database", "The game record could not be created.", error);
     }
     return data;
   } catch (error) {
     if (error instanceof GameServiceError) throw error;
-    throw new GameServiceError("database", "The game record could not be created.");
+    throw new GameServiceError("database", "The game record could not be created.", error);
   }
 }
 
@@ -140,6 +152,7 @@ export async function updateGameGeneration(
     .eq("id", gameId)
     .select(GAME_COLUMNS)
     .single();
-  if (error || !data) throw new GameServiceError("database", "The game status could not be saved.");
+  if (error || !data)
+    throw new GameServiceError("database", "The game status could not be saved.", error);
   return data;
 }

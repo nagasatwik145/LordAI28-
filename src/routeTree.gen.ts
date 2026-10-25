@@ -42,6 +42,7 @@ import { Route as ApiAnythingStudioRouteImport } from './routes/api/anything-stu
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiGamesRouteImport } from './routes/api/games'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiHealthCenterRouteImport } from './routes/api/health-center'
 import { Route as ApiImagesRouteImport } from './routes/api/images'
 import { Route as ApiMissionsRouteImport } from './routes/api/missions'
 import { Route as ApiModelsRouteImport } from './routes/api/models'
@@ -51,6 +52,7 @@ import { Route as ApiSharesRouteImport } from './routes/api/shares'
 import { Route as ApiTitleRouteImport } from './routes/api/title'
 import { Route as ApiWhatIfRouteImport } from './routes/api/what-if'
 import { Route as ShareTokenRouteImport } from './routes/share/$token'
+import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin/analytics'
 import { Route as AuthenticatedCanvasIndexRouteImport } from './routes/_authenticated/canvas/index'
 import { Route as AuthenticatedCanvasIdRouteImport } from './routes/_authenticated/canvas/$id'
 import { Route as AuthenticatedCommandCenterIndexRouteImport } from './routes/_authenticated/command-center/index'
@@ -68,7 +70,11 @@ import { Route as AuthenticatedKnowledge2IndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedObservabilityIndexRouteImport } from './routes/_authenticated/observability/index'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects/index'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects/$id'
+import { Route as ApiAdminAnalyticsRouteImport } from './routes/api/admin/analytics'
 import { Route as ApiAdminGatewayRouteImport } from './routes/api/admin/gateway'
+import { Route as ApiAnalyticsConsentRouteImport } from './routes/api/analytics/consent'
+import { Route as ApiAnalyticsEventsRouteImport } from './routes/api/analytics/events'
+import { Route as ApiBillingPhonepeRouteImport } from './routes/api/billing/phonepe'
 import { Route as ApiBillingStatusRouteImport } from './routes/api/billing/status'
 import { Route as ApiBillingSubscriptionRouteImport } from './routes/api/billing/subscription'
 import { Route as ApiBillingVerifyRouteImport } from './routes/api/billing/verify'
@@ -93,6 +99,7 @@ import { Route as ApiLearningAnalyticsRouteImport } from './routes/api/learning/
 import { Route as ApiLearningExamsRouteImport } from './routes/api/learning/exams'
 import { Route as ApiLearningFeaturesRouteImport } from './routes/api/learning/features'
 import { Route as ApiLearningFlashcardsRouteImport } from './routes/api/learning/flashcards'
+import { Route as ApiLearningFocusSessionsRouteImport } from './routes/api/learning/focus-sessions'
 import { Route as ApiLearningGoalsRouteImport } from './routes/api/learning/goals'
 import { Route as ApiLearningMemoryRouteImport } from './routes/api/learning/memory'
 import { Route as ApiLearningNotesRouteImport } from './routes/api/learning/notes'
@@ -302,6 +309,11 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
   path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHealthCenterRoute = ApiHealthCenterRouteImport.update({
+  id: '/api/health-center',
+  path: '/api/health-center',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiImagesRoute = ApiImagesRouteImport.update({
   id: '/api/images',
   path: '/api/images',
@@ -347,6 +359,12 @@ const ShareTokenRoute = ShareTokenRouteImport.update({
   path: '/share/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminAnalyticsRoute =
+  AuthenticatedAdminAnalyticsRouteImport.update({
+    id: '/admin/analytics',
+    path: '/admin/analytics',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedCanvasIndexRoute =
   AuthenticatedCanvasIndexRouteImport.update({
     id: '/canvas/',
@@ -447,9 +465,29 @@ const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
   path: '/projects/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiAdminAnalyticsRoute = ApiAdminAnalyticsRouteImport.update({
+  id: '/api/admin/analytics',
+  path: '/api/admin/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminGatewayRoute = ApiAdminGatewayRouteImport.update({
   id: '/api/admin/gateway',
   path: '/api/admin/gateway',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAnalyticsConsentRoute = ApiAnalyticsConsentRouteImport.update({
+  id: '/api/analytics/consent',
+  path: '/api/analytics/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAnalyticsEventsRoute = ApiAnalyticsEventsRouteImport.update({
+  id: '/api/analytics/events',
+  path: '/api/analytics/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBillingPhonepeRoute = ApiBillingPhonepeRouteImport.update({
+  id: '/api/billing/phonepe',
+  path: '/api/billing/phonepe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiBillingStatusRoute = ApiBillingStatusRouteImport.update({
@@ -572,6 +610,12 @@ const ApiLearningFlashcardsRoute = ApiLearningFlashcardsRouteImport.update({
   path: '/api/learning/flashcards',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLearningFocusSessionsRoute =
+  ApiLearningFocusSessionsRouteImport.update({
+    id: '/api/learning/focus-sessions',
+    path: '/api/learning/focus-sessions',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiLearningGoalsRoute = ApiLearningGoalsRouteImport.update({
   id: '/api/learning/goals',
   path: '/api/learning/goals',
@@ -813,6 +857,7 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/games': typeof ApiGamesRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/health-center': typeof ApiHealthCenterRoute
   '/api/images': typeof ApiImagesRouteWithChildren
   '/api/missions': typeof ApiMissionsRoute
   '/api/models': typeof ApiModelsRoute
@@ -822,6 +867,7 @@ export interface FileRoutesByFullPath {
   '/api/title': typeof ApiTitleRoute
   '/api/what-if': typeof ApiWhatIfRoute
   '/share/$token': typeof ShareTokenRoute
+  '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/canvas/$id': typeof AuthenticatedCanvasIdRoute
   '/command-center/automations': typeof AuthenticatedCommandCenterAutomationsRoute
   '/command-center/browser': typeof AuthenticatedCommandCenterBrowserRoute
@@ -833,7 +879,11 @@ export interface FileRoutesByFullPath {
   '/command-center/smart-home': typeof AuthenticatedCommandCenterSmartHomeRoute
   '/command-center/vision': typeof AuthenticatedCommandCenterVisionRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/api/admin/analytics': typeof ApiAdminAnalyticsRoute
   '/api/admin/gateway': typeof ApiAdminGatewayRoute
+  '/api/analytics/consent': typeof ApiAnalyticsConsentRoute
+  '/api/analytics/events': typeof ApiAnalyticsEventsRoute
+  '/api/billing/phonepe': typeof ApiBillingPhonepeRoute
   '/api/billing/status': typeof ApiBillingStatusRoute
   '/api/billing/subscription': typeof ApiBillingSubscriptionRoute
   '/api/billing/verify': typeof ApiBillingVerifyRoute
@@ -855,6 +905,7 @@ export interface FileRoutesByFullPath {
   '/api/learning/exams': typeof ApiLearningExamsRoute
   '/api/learning/features': typeof ApiLearningFeaturesRoute
   '/api/learning/flashcards': typeof ApiLearningFlashcardsRoute
+  '/api/learning/focus-sessions': typeof ApiLearningFocusSessionsRoute
   '/api/learning/goals': typeof ApiLearningGoalsRoute
   '/api/learning/memory': typeof ApiLearningMemoryRoute
   '/api/learning/notes': typeof ApiLearningNotesRoute
@@ -937,6 +988,7 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/games': typeof ApiGamesRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/health-center': typeof ApiHealthCenterRoute
   '/api/images': typeof ApiImagesRouteWithChildren
   '/api/missions': typeof ApiMissionsRoute
   '/api/models': typeof ApiModelsRoute
@@ -946,6 +998,7 @@ export interface FileRoutesByTo {
   '/api/title': typeof ApiTitleRoute
   '/api/what-if': typeof ApiWhatIfRoute
   '/share/$token': typeof ShareTokenRoute
+  '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/canvas/$id': typeof AuthenticatedCanvasIdRoute
   '/command-center/automations': typeof AuthenticatedCommandCenterAutomationsRoute
   '/command-center/browser': typeof AuthenticatedCommandCenterBrowserRoute
@@ -957,7 +1010,11 @@ export interface FileRoutesByTo {
   '/command-center/smart-home': typeof AuthenticatedCommandCenterSmartHomeRoute
   '/command-center/vision': typeof AuthenticatedCommandCenterVisionRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/api/admin/analytics': typeof ApiAdminAnalyticsRoute
   '/api/admin/gateway': typeof ApiAdminGatewayRoute
+  '/api/analytics/consent': typeof ApiAnalyticsConsentRoute
+  '/api/analytics/events': typeof ApiAnalyticsEventsRoute
+  '/api/billing/phonepe': typeof ApiBillingPhonepeRoute
   '/api/billing/status': typeof ApiBillingStatusRoute
   '/api/billing/subscription': typeof ApiBillingSubscriptionRoute
   '/api/billing/verify': typeof ApiBillingVerifyRoute
@@ -979,6 +1036,7 @@ export interface FileRoutesByTo {
   '/api/learning/exams': typeof ApiLearningExamsRoute
   '/api/learning/features': typeof ApiLearningFeaturesRoute
   '/api/learning/flashcards': typeof ApiLearningFlashcardsRoute
+  '/api/learning/focus-sessions': typeof ApiLearningFocusSessionsRoute
   '/api/learning/goals': typeof ApiLearningGoalsRoute
   '/api/learning/memory': typeof ApiLearningMemoryRoute
   '/api/learning/notes': typeof ApiLearningNotesRoute
@@ -1064,6 +1122,7 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/games': typeof ApiGamesRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/health-center': typeof ApiHealthCenterRoute
   '/api/images': typeof ApiImagesRouteWithChildren
   '/api/missions': typeof ApiMissionsRoute
   '/api/models': typeof ApiModelsRoute
@@ -1073,6 +1132,7 @@ export interface FileRoutesById {
   '/api/title': typeof ApiTitleRoute
   '/api/what-if': typeof ApiWhatIfRoute
   '/share/$token': typeof ShareTokenRoute
+  '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/canvas/$id': typeof AuthenticatedCanvasIdRoute
   '/_authenticated/command-center/automations': typeof AuthenticatedCommandCenterAutomationsRoute
   '/_authenticated/command-center/browser': typeof AuthenticatedCommandCenterBrowserRoute
@@ -1084,7 +1144,11 @@ export interface FileRoutesById {
   '/_authenticated/command-center/smart-home': typeof AuthenticatedCommandCenterSmartHomeRoute
   '/_authenticated/command-center/vision': typeof AuthenticatedCommandCenterVisionRoute
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/api/admin/analytics': typeof ApiAdminAnalyticsRoute
   '/api/admin/gateway': typeof ApiAdminGatewayRoute
+  '/api/analytics/consent': typeof ApiAnalyticsConsentRoute
+  '/api/analytics/events': typeof ApiAnalyticsEventsRoute
+  '/api/billing/phonepe': typeof ApiBillingPhonepeRoute
   '/api/billing/status': typeof ApiBillingStatusRoute
   '/api/billing/subscription': typeof ApiBillingSubscriptionRoute
   '/api/billing/verify': typeof ApiBillingVerifyRoute
@@ -1106,6 +1170,7 @@ export interface FileRoutesById {
   '/api/learning/exams': typeof ApiLearningExamsRoute
   '/api/learning/features': typeof ApiLearningFeaturesRoute
   '/api/learning/flashcards': typeof ApiLearningFlashcardsRoute
+  '/api/learning/focus-sessions': typeof ApiLearningFocusSessionsRoute
   '/api/learning/goals': typeof ApiLearningGoalsRoute
   '/api/learning/memory': typeof ApiLearningMemoryRoute
   '/api/learning/notes': typeof ApiLearningNotesRoute
@@ -1191,6 +1256,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/games'
     | '/api/health'
+    | '/api/health-center'
     | '/api/images'
     | '/api/missions'
     | '/api/models'
@@ -1200,6 +1266,7 @@ export interface FileRouteTypes {
     | '/api/title'
     | '/api/what-if'
     | '/share/$token'
+    | '/admin/analytics'
     | '/canvas/$id'
     | '/command-center/automations'
     | '/command-center/browser'
@@ -1211,7 +1278,11 @@ export interface FileRouteTypes {
     | '/command-center/smart-home'
     | '/command-center/vision'
     | '/projects/$id'
+    | '/api/admin/analytics'
     | '/api/admin/gateway'
+    | '/api/analytics/consent'
+    | '/api/analytics/events'
+    | '/api/billing/phonepe'
     | '/api/billing/status'
     | '/api/billing/subscription'
     | '/api/billing/verify'
@@ -1233,6 +1304,7 @@ export interface FileRouteTypes {
     | '/api/learning/exams'
     | '/api/learning/features'
     | '/api/learning/flashcards'
+    | '/api/learning/focus-sessions'
     | '/api/learning/goals'
     | '/api/learning/memory'
     | '/api/learning/notes'
@@ -1315,6 +1387,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/games'
     | '/api/health'
+    | '/api/health-center'
     | '/api/images'
     | '/api/missions'
     | '/api/models'
@@ -1324,6 +1397,7 @@ export interface FileRouteTypes {
     | '/api/title'
     | '/api/what-if'
     | '/share/$token'
+    | '/admin/analytics'
     | '/canvas/$id'
     | '/command-center/automations'
     | '/command-center/browser'
@@ -1335,7 +1409,11 @@ export interface FileRouteTypes {
     | '/command-center/smart-home'
     | '/command-center/vision'
     | '/projects/$id'
+    | '/api/admin/analytics'
     | '/api/admin/gateway'
+    | '/api/analytics/consent'
+    | '/api/analytics/events'
+    | '/api/billing/phonepe'
     | '/api/billing/status'
     | '/api/billing/subscription'
     | '/api/billing/verify'
@@ -1357,6 +1435,7 @@ export interface FileRouteTypes {
     | '/api/learning/exams'
     | '/api/learning/features'
     | '/api/learning/flashcards'
+    | '/api/learning/focus-sessions'
     | '/api/learning/goals'
     | '/api/learning/memory'
     | '/api/learning/notes'
@@ -1441,6 +1520,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/games'
     | '/api/health'
+    | '/api/health-center'
     | '/api/images'
     | '/api/missions'
     | '/api/models'
@@ -1450,6 +1530,7 @@ export interface FileRouteTypes {
     | '/api/title'
     | '/api/what-if'
     | '/share/$token'
+    | '/_authenticated/admin/analytics'
     | '/_authenticated/canvas/$id'
     | '/_authenticated/command-center/automations'
     | '/_authenticated/command-center/browser'
@@ -1461,7 +1542,11 @@ export interface FileRouteTypes {
     | '/_authenticated/command-center/smart-home'
     | '/_authenticated/command-center/vision'
     | '/_authenticated/projects/$id'
+    | '/api/admin/analytics'
     | '/api/admin/gateway'
+    | '/api/analytics/consent'
+    | '/api/analytics/events'
+    | '/api/billing/phonepe'
     | '/api/billing/status'
     | '/api/billing/subscription'
     | '/api/billing/verify'
@@ -1483,6 +1568,7 @@ export interface FileRouteTypes {
     | '/api/learning/exams'
     | '/api/learning/features'
     | '/api/learning/flashcards'
+    | '/api/learning/focus-sessions'
     | '/api/learning/goals'
     | '/api/learning/memory'
     | '/api/learning/notes'
@@ -1544,6 +1630,7 @@ export interface RootRouteChildren {
   ApiChatRoute: typeof ApiChatRouteWithChildren
   ApiGamesRoute: typeof ApiGamesRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiHealthCenterRoute: typeof ApiHealthCenterRoute
   ApiImagesRoute: typeof ApiImagesRouteWithChildren
   ApiMissionsRoute: typeof ApiMissionsRoute
   ApiModelsRoute: typeof ApiModelsRoute
@@ -1553,7 +1640,11 @@ export interface RootRouteChildren {
   ApiTitleRoute: typeof ApiTitleRoute
   ApiWhatIfRoute: typeof ApiWhatIfRoute
   ShareTokenRoute: typeof ShareTokenRoute
+  ApiAdminAnalyticsRoute: typeof ApiAdminAnalyticsRoute
   ApiAdminGatewayRoute: typeof ApiAdminGatewayRoute
+  ApiAnalyticsConsentRoute: typeof ApiAnalyticsConsentRoute
+  ApiAnalyticsEventsRoute: typeof ApiAnalyticsEventsRoute
+  ApiBillingPhonepeRoute: typeof ApiBillingPhonepeRoute
   ApiBillingStatusRoute: typeof ApiBillingStatusRoute
   ApiBillingSubscriptionRoute: typeof ApiBillingSubscriptionRoute
   ApiBillingVerifyRoute: typeof ApiBillingVerifyRoute
@@ -1571,6 +1662,7 @@ export interface RootRouteChildren {
   ApiLearningExamsRoute: typeof ApiLearningExamsRoute
   ApiLearningFeaturesRoute: typeof ApiLearningFeaturesRoute
   ApiLearningFlashcardsRoute: typeof ApiLearningFlashcardsRoute
+  ApiLearningFocusSessionsRoute: typeof ApiLearningFocusSessionsRoute
   ApiLearningGoalsRoute: typeof ApiLearningGoalsRoute
   ApiLearningMemoryRoute: typeof ApiLearningMemoryRoute
   ApiLearningNotesRoute: typeof ApiLearningNotesRoute
@@ -1843,6 +1935,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/health-center': {
+      id: '/api/health-center'
+      path: '/api/health-center'
+      fullPath: '/api/health-center'
+      preLoaderRoute: typeof ApiHealthCenterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/images': {
       id: '/api/images'
       path: '/api/images'
@@ -1905,6 +2004,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/share/$token'
       preLoaderRoute: typeof ShareTokenRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/admin/analytics': {
+      id: '/_authenticated/admin/analytics'
+      path: '/admin/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AuthenticatedAdminAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/canvas/': {
       id: '/_authenticated/canvas/'
@@ -2025,11 +2131,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/admin/analytics': {
+      id: '/api/admin/analytics'
+      path: '/api/admin/analytics'
+      fullPath: '/api/admin/analytics'
+      preLoaderRoute: typeof ApiAdminAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/gateway': {
       id: '/api/admin/gateway'
       path: '/api/admin/gateway'
       fullPath: '/api/admin/gateway'
       preLoaderRoute: typeof ApiAdminGatewayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/analytics/consent': {
+      id: '/api/analytics/consent'
+      path: '/api/analytics/consent'
+      fullPath: '/api/analytics/consent'
+      preLoaderRoute: typeof ApiAnalyticsConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/analytics/events': {
+      id: '/api/analytics/events'
+      path: '/api/analytics/events'
+      fullPath: '/api/analytics/events'
+      preLoaderRoute: typeof ApiAnalyticsEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/billing/phonepe': {
+      id: '/api/billing/phonepe'
+      path: '/api/billing/phonepe'
+      fullPath: '/api/billing/phonepe'
+      preLoaderRoute: typeof ApiBillingPhonepeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/billing/status': {
@@ -2198,6 +2332,13 @@ declare module '@tanstack/react-router' {
       path: '/api/learning/flashcards'
       fullPath: '/api/learning/flashcards'
       preLoaderRoute: typeof ApiLearningFlashcardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/learning/focus-sessions': {
+      id: '/api/learning/focus-sessions'
+      path: '/api/learning/focus-sessions'
+      fullPath: '/api/learning/focus-sessions'
+      preLoaderRoute: typeof ApiLearningFocusSessionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/learning/goals': {
@@ -2547,6 +2688,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUpgradeRoute: typeof AuthenticatedUpgradeRoute
   AuthenticatedVoiceRoute: typeof AuthenticatedVoiceRoute
   AuthenticatedWhatIfRoute: typeof AuthenticatedWhatIfRoute
+  AuthenticatedAdminAnalyticsRoute: typeof AuthenticatedAdminAnalyticsRoute
   AuthenticatedCanvasIdRoute: typeof AuthenticatedCanvasIdRoute
   AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
   AuthenticatedCanvasIndexRoute: typeof AuthenticatedCanvasIndexRoute
@@ -2582,6 +2724,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUpgradeRoute: AuthenticatedUpgradeRoute,
   AuthenticatedVoiceRoute: AuthenticatedVoiceRoute,
   AuthenticatedWhatIfRoute: AuthenticatedWhatIfRoute,
+  AuthenticatedAdminAnalyticsRoute: AuthenticatedAdminAnalyticsRoute,
   AuthenticatedCanvasIdRoute: AuthenticatedCanvasIdRoute,
   AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
   AuthenticatedCanvasIndexRoute: AuthenticatedCanvasIndexRoute,
@@ -2663,6 +2806,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChatRoute: ApiChatRouteWithChildren,
   ApiGamesRoute: ApiGamesRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiHealthCenterRoute: ApiHealthCenterRoute,
   ApiImagesRoute: ApiImagesRouteWithChildren,
   ApiMissionsRoute: ApiMissionsRoute,
   ApiModelsRoute: ApiModelsRoute,
@@ -2672,7 +2816,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiTitleRoute: ApiTitleRoute,
   ApiWhatIfRoute: ApiWhatIfRoute,
   ShareTokenRoute: ShareTokenRoute,
+  ApiAdminAnalyticsRoute: ApiAdminAnalyticsRoute,
   ApiAdminGatewayRoute: ApiAdminGatewayRoute,
+  ApiAnalyticsConsentRoute: ApiAnalyticsConsentRoute,
+  ApiAnalyticsEventsRoute: ApiAnalyticsEventsRoute,
+  ApiBillingPhonepeRoute: ApiBillingPhonepeRoute,
   ApiBillingStatusRoute: ApiBillingStatusRoute,
   ApiBillingSubscriptionRoute: ApiBillingSubscriptionRoute,
   ApiBillingVerifyRoute: ApiBillingVerifyRoute,
@@ -2690,6 +2838,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLearningExamsRoute: ApiLearningExamsRoute,
   ApiLearningFeaturesRoute: ApiLearningFeaturesRoute,
   ApiLearningFlashcardsRoute: ApiLearningFlashcardsRoute,
+  ApiLearningFocusSessionsRoute: ApiLearningFocusSessionsRoute,
   ApiLearningGoalsRoute: ApiLearningGoalsRoute,
   ApiLearningMemoryRoute: ApiLearningMemoryRoute,
   ApiLearningNotesRoute: ApiLearningNotesRoute,

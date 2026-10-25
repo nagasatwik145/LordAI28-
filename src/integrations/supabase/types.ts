@@ -35,8 +35,11 @@ export type Database = {
     Tables: {
       autopilot_missions: {
         Row: {
+          approved_scope_hash: string | null;
           created_at: string;
+          events: Json;
           execution_lease_until: string | null;
+          idempotency_key: string | null;
           id: string;
           objective: string;
           plan: Json;
@@ -47,8 +50,11 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          approved_scope_hash?: string | null;
           created_at?: string;
+          events?: Json;
           execution_lease_until?: string | null;
+          idempotency_key?: string | null;
           id?: string;
           objective: string;
           plan: Json;
@@ -59,8 +65,11 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          approved_scope_hash?: string | null;
           created_at?: string;
+          events?: Json;
           execution_lease_until?: string | null;
+          idempotency_key?: string | null;
           id?: string;
           objective?: string;
           plan?: Json;
@@ -128,6 +137,69 @@ export type Database = {
           razorpay_subscription_id?: string | null;
           status?: string;
           updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      pro_billing_events: {
+        Row: {
+          amount: number | null;
+          created_at: string;
+          currency: string;
+          event_type: string;
+          id: number;
+          razorpay_payment_id: string | null;
+          razorpay_subscription_id: string;
+          user_id: string;
+        };
+        Insert: {
+          amount?: number | null;
+          created_at?: string;
+          currency?: string;
+          event_type: string;
+          id?: number;
+          razorpay_payment_id?: string | null;
+          razorpay_subscription_id: string;
+          user_id: string;
+        };
+        Update: {
+          amount?: number | null;
+          created_at?: string;
+          currency?: string;
+          event_type?: string;
+          id?: number;
+          razorpay_payment_id?: string | null;
+          razorpay_subscription_id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      phonepe_orders: {
+        Row: {
+          amount: number;
+          created_at: string;
+          merchant_order_id: string;
+          phonepe_order_id: string | null;
+          plan: string;
+          status: string;
+          user_id: string;
+        };
+        Insert: {
+          amount: number;
+          created_at?: string;
+          merchant_order_id: string;
+          phonepe_order_id?: string | null;
+          plan: string;
+          status?: string;
+          user_id: string;
+        };
+        Update: {
+          amount?: number;
+          created_at?: string;
+          merchant_order_id?: string;
+          phonepe_order_id?: string | null;
+          plan?: string;
+          status?: string;
           user_id?: string;
         };
         Relationships: [];
@@ -3323,6 +3395,7 @@ export type Database = {
           auto_save: boolean;
           confidence_threshold: number;
           memory_enabled: boolean;
+          personalization_enabled: boolean;
           updated_at: string;
           user_id: string;
         };
@@ -3331,6 +3404,7 @@ export type Database = {
           auto_save?: boolean;
           confidence_threshold?: number;
           memory_enabled?: boolean;
+          personalization_enabled?: boolean;
           updated_at?: string;
           user_id: string;
         };
@@ -3339,6 +3413,7 @@ export type Database = {
           auto_save?: boolean;
           confidence_threshold?: number;
           memory_enabled?: boolean;
+          personalization_enabled?: boolean;
           updated_at?: string;
           user_id?: string;
         };
@@ -3538,6 +3613,14 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      activate_phonepe_order: {
+        Args: {
+          p_merchant_order_id: string;
+          p_phonepe_order_id: string;
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       create_group_with_owner: {
         Args: { p_avatar_url?: string; p_description?: string; p_name: string };
         Returns: string;

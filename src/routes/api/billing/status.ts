@@ -3,7 +3,9 @@ import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middlew
 import {
   hasProEntitlement,
   hasConfiguredLifetimeIdentity,
+  LORD_PRO_ENABLED,
 } from "@/lib/billing/entitlements.server";
+import { isPhonePeConfigured } from "@/lib/billing/phonepe.server";
 
 export const Route = createFileRoute("/api/billing/status")({
   server: {
@@ -19,7 +21,9 @@ export const Route = createFileRoute("/api/billing/status")({
         return Response.json(
           {
             pro,
-            lifetime: hasConfiguredLifetimeIdentity(user),
+            enabled: LORD_PRO_ENABLED,
+            phonepeAvailable: isPhonePeConfigured(),
+            lifetime: LORD_PRO_ENABLED && hasConfiguredLifetimeIdentity(user),
             pricing: {
               monthly: Number(process.env.LORD_PRO_MONTHLY_PRICE_INR ?? 99),
               yearly: Number(process.env.LORD_PRO_YEARLY_PRICE_INR ?? 990),

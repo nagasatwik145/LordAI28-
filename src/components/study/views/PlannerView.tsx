@@ -704,6 +704,20 @@ export function PlannerView({ snapshot, userId, onNavigate, onBack, refresh }: P
               dailyTarget={dailyTarget}
               onTaskClick={(task) => setEditingTask(task)}
               onTaskAction={(task, action) => void handleTaskContextAction(task, action)}
+              onStartFocus={(task) => {
+                const plannedSubject = snapshot?.concepts.find(
+                  (concept) => concept.id === task.concept_id,
+                )?.subject;
+                window.dispatchEvent(
+                  new CustomEvent("lord:open-focus-session", {
+                    detail: {
+                      subject: plannedSubject ?? "",
+                      label: task.title,
+                      minutes: task.estimated_minutes,
+                    },
+                  }),
+                );
+              }}
             />
           )}
           {viewMode === "calendar" && (

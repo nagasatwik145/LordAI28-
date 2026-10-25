@@ -8,6 +8,7 @@ import { hasChatModelAccess } from "./chat-model-catalog";
 import { recordModelAttempt } from "./model-availability";
 import type { ChatMessage } from "./types";
 import { createLordError } from "@/lib/lord-error";
+import { buildSourcesFooter, type WebResearchStatus, type WebSource } from "./web-sources";
 
 export type CouncilRole =
   "Solution Designer" | "Researcher" | "Independent Analyst" | "Critic" | "Final Synthesizer";
@@ -475,6 +476,8 @@ export function streamCouncilResponse(
   signal: AbortSignal,
   limits: CouncilLimits = getCouncilLimits(),
   requestId = crypto.randomUUID(),
+  sources: readonly WebSource[] = [],
+  webResearchStatus?: WebResearchStatus,
 ): Response {
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
@@ -501,6 +504,33 @@ export function streamCouncilResponse(
           messageMetadata: { council: publicProgress(result) },
         });
         writer.write({ type: "text-delta", id: messageId, delta: result.finalAnswer ?? "" });
+        if (sources.length) {
+          writer.write({
+            type: "data-web-sources",
+            data: sources.map((source, index) => ({
+              sourceId: `web-source-${index + 1}`,
+              title: source.title,
+              url: source.url,
+              publishedDate: source.publishedDate,
+              domain: source.domain,
+              verification: source.verification ?? "snippet",
+            })),
+          });
+          for (const [index, source] of sources.entries()) {
+            writer.write({
+              type: "source-url",
+              sourceId: `web-source-${index + 1}`,
+              url: source.url,
+              title: source.title,
+            });
+          }
+          const sourcesFooter = buildSourcesFooter(sources);
+          if (sourcesFooter)
+            writer.write({ type: "text-delta", id: messageId, delta: sourcesFooter });
+        }
+        if (webResearchStatus) {
+          writer.write({ type: "data-web-research", data: webResearchStatus });
+        }
         writer.write({ type: "text-end", id: messageId });
       } catch (error) {
         if (signal.aborted) {

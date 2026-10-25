@@ -2,6 +2,8 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export type VerifiedIdentity = { id: string; email?: string; email_confirmed_at?: string | null };
 
+export const LORD_PRO_ENABLED = true;
+
 const LIFETIME_EMAILS = new Set([
   "nagasatwik145@gmail.com",
   "djahnavi451@gmail.com",
@@ -33,7 +35,7 @@ export function isEntitlementActive(
 }
 
 export async function hasProEntitlement(user: VerifiedIdentity): Promise<boolean> {
-  if (hasConfiguredLifetimeIdentity(user)) return true;
+  if (hasConfiguredLifetimeIdentity(user)) return LORD_PRO_ENABLED;
   if (!user.email_confirmed_at) return false;
   const { data, error } = await supabaseAdmin
     .from("pro_entitlements")
@@ -49,5 +51,5 @@ export async function hasProEntitlement(user: VerifiedIdentity): Promise<boolean
       .eq("status", "active");
     if (expiryError) throw expiryError;
   }
-  return isEntitlementActive(data?.status, data?.expires_at);
+  return LORD_PRO_ENABLED && isEntitlementActive(data?.status, data?.expires_at);
 }

@@ -15,6 +15,9 @@ import {
   ShieldCheck,
   Brain,
   SlidersHorizontal,
+  Eye,
+  EyeOff,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/lord/AppShell";
@@ -75,9 +78,10 @@ function MemoryPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [editingCategory, setEditingCategory] = useState<MemoryCategory>("note");
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(true);
 
   const memoryEnabled = settings?.memory_enabled ?? true;
+  const personalizationEnabled = settings?.personalization_enabled ?? true;
 
   const filtered = useMemo(
     () =>
@@ -131,6 +135,29 @@ function MemoryPage() {
       await updateMutation.mutateAsync({ id: m.id, pinned: !m.pinned });
     } catch {
       toast.error("Couldn't update pin");
+    }
+  };
+
+  const togglePersonalization = async (m: MemoryRecord) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: m.id,
+        useInContext: !(m.use_in_context ?? true),
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update personalization");
+    }
+  };
+
+  const approveMemory = async (m: MemoryRecord) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: m.id,
+        confirmationStatus: "confirmed",
+        useInContext: true,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't approve memory");
     }
   };
 
@@ -213,7 +240,15 @@ function MemoryPage() {
       {!memoryEnabled && (
         <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
           <ShieldOff className="h-4 w-4" />
-          Memory is disabled. LORD won't save or use memories until you re-enable it.
+          Memory collection is off. LORD will not save or use memories. Existing records remain
+          stored until you delete them from this page.
+        </div>
+      )}
+      {memoryEnabled && !personalizationEnabled && (
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          <EyeOff className="h-4 w-4" />
+          Personalization is paused. Your saved memories remain available here but are not added to
+          chat context.
         </div>
       )}
 
@@ -294,10 +329,18 @@ function MemoryPage() {
               <div className="mt-4 space-y-3 border-t border-border/30 pt-4">
                 <ToggleRow
                   icon={memoryEnabled ? ShieldCheck : ShieldOff}
-                  label="Memory"
-                  description="Let LORD remember things across chats"
+                  label="Memory collection"
+                  description="Allow LORD to save new memories from chats or manual entry"
                   checked={memoryEnabled}
                   onChange={(v) => updateSetting({ memory_enabled: v })}
+                />
+                <ToggleRow
+                  icon={personalizationEnabled ? Eye : EyeOff}
+                  label="Use memories in chat"
+                  description="Pause or resume relevant saved context in your chats"
+                  checked={personalizationEnabled}
+                  disabled={!memoryEnabled}
+                  onChange={(v) => updateSetting({ personalization_enabled: v })}
                 />
                 <ToggleRow
                   icon={Brain}
@@ -341,6 +384,11 @@ function MemoryPage() {
                 </div>
               </div>
             )}
+            <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
+              Deleting a memory removes it from LORD&apos;s active memory records and
+              personalization. This does not delete the conversation it came from, and provider
+              backups may retain data according to their retention policies.
+            </p>
           </HudPanel>
         </div>
 
@@ -448,6 +496,36 @@ function MemoryPage() {
                               <PinOff className="h-4 w-4" />
                             )}
                           </button>
+                          {m.confirmation_status === "suggested" && (
+                            <button
+                              onClick={() => void approveMemory(m)}
+                              className="text-muted-foreground hover:text-primary"
+                              aria-label="Approve memory"
+                              title="Approve memory captured from chat"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => void togglePersonalization(m)}
+                            className="text-muted-foreground hover:text-primary"
+                            aria-label={
+                              m.use_in_context === false
+                                ? "Include in personalization"
+                                : "Exclude from personalization"
+                            }
+                            title={
+                              m.use_in_context === false
+                                ? "Include in personalization"
+                                : "Exclude from personalization"
+                            }
+                          >
+                            {m.use_in_context === false ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
                           <button
                             onClick={() => {
                               setEditingId(m.id);
@@ -480,8 +558,19 @@ function MemoryPage() {
                       {m.category}
                     </span>
                     {m.source === "auto" && (
-                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">auto</span>
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
+                        {m.confirmation_status === "suggested"
+                          ? "captured from chat · approval needed"
+                          : "captured from chat"}
+                      </span>
                     )}
+                    {m.source !== "auto" && (
+                      <span className="rounded bg-muted/60 px-1.5 py-0.5">
+                        {m.source === "imported" ? "imported" : "added by you"}
+                      </span>
+                    )}
+                    <span>{m.project_id ? "project-specific" : "all projects"}</span>
+                    {m.use_in_context === false && <span>excluded from personalization</span>}
                     {m.confidence < 1 && (
                       <span title="Memory confidence">{(m.confidence * 100).toFixed(0)}%</span>
                     )}
