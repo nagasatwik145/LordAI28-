@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "lint": "eslint src vite.config.ts capacitor.config.ts eslint.config.js",
     "format": "prettier --write .",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=1",
     "test:images": "node scripts/test-image-models.mjs",
     "test:watch": "vitest",
     "cap:sync": "npm run build && npx cap sync",

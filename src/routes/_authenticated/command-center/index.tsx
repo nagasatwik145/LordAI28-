@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PersonalDashboard } from "@/components/lord/command-center/personal-dashboard";
+import { DailyBriefingDashboard } from "@/components/lord/command-center/daily-briefing";
 
 export const Route = createFileRoute("/_authenticated/command-center/")({
   component: Dashboard,
@@ -7,5 +7,5 @@ export const Route = createFileRoute("/_authenticated/command-center/")({
 
 function Dashboard() {
   const { user } = Route.useRouteContext();
-  return <PersonalDashboard userId={user.id} />;
+  return <DailyBriefingDashboard userId={user.id} />;
 }

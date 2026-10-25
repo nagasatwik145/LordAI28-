@@ -124,14 +124,11 @@ export async function searchWebSources(
     .flatMap((item): WebSource[] => {
       if (!item || typeof item !== "object") return [];
       const result = item as Record<string, unknown>;
-      const title =
-        typeof result.title === "string" && result.title.trim()
-          ? result.title.slice(0, 240)
-          : "Source";
+      const title = typeof result.title === "string" ? result.title.trim().slice(0, 240) : "";
       const url = normalizeSafeSourceUrl(result.url);
       const content =
         typeof result.content === "string" ? result.content.slice(0, MAX_CONTENT_CHARS) : "";
-      if (!url) return [];
+      if (!url || !title) return [];
       const domain = new URL(url).hostname.replace(/^www\./, "");
       return [
         {

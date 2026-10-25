@@ -19,8 +19,8 @@ function makeClient(
     data: { memory_enabled: memoryEnabled, personalization_enabled: personalizationEnabled },
     error,
   });
-  const eq = vi.fn(() => ({ maybeSingle }));
-  const select = vi.fn(() => ({ eq }));
+  const query = { maybeSingle, eq: vi.fn(() => query) };
+  const select = vi.fn(() => query);
   const from = vi.fn(() => ({ select }));
 
   return {
@@ -71,6 +71,18 @@ describe("chat memory prompt", () => {
     );
     expect(brain.buildBrainContext).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "user-1", query: "continue auth" }),
+      client,
+    );
+  });
+
+  it("keeps project context available when personal memory is disabled", async () => {
+    const { client } = makeClient(false);
+
+    await expect(
+      buildMemoryPrompt(client, "user-1", "project question", "project-1"),
+    ).resolves.toBe("Relevant project memory");
+    expect(brain.buildBrainContext).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-1", projectId: "project-1" }),
       client,
     );
   });

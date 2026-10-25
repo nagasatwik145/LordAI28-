@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { apiOkResponse, apiErrorResponse, getSafeErrorMessage } from "@/lib/api-error";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
-import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const ProjectSchema = z.object({
   name: z.string().min(1).max(200),
@@ -18,7 +18,10 @@ export const Route = createFileRoute("/api/projects/")({
     handlers: {
       GET: async ({ context }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const { data, error } = await supabase
             .from("projects")
             .select("*")
@@ -34,7 +37,10 @@ export const Route = createFileRoute("/api/projects/")({
       },
       POST: async ({ request, context }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const body = await request.json();
           const parsed = ProjectSchema.safeParse(body);
           if (!parsed.success) {

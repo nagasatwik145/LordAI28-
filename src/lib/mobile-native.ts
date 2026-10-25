@@ -74,6 +74,7 @@ export const mobileNotifications = {
     at: Date,
     route = "/study",
     id = Date.now() % 2147483647,
+    repeats = false,
   ) => {
     const permission = await LocalNotifications.requestPermissions();
     if (permission.display !== "granted") return { scheduled: false as const, id };
@@ -83,7 +84,7 @@ export const mobileNotifications = {
           id,
           title,
           body,
-          schedule: { at },
+          schedule: { at, repeats },
           extra: { route: safeInternalRoute(route) ?? "/study" },
         },
       ],

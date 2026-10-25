@@ -15,11 +15,19 @@ export async function buildMemoryPrompt(
       .select("memory_enabled,personalization_enabled")
       .eq("user_id", userId)
       .maybeSingle();
-    if (
-      settingsError ||
-      !isMemoryEnabled(settings) ||
-      settings?.personalization_enabled === false
-    ) {
+    if (settingsError) return "";
+    if (projectId) {
+      const { data: ownedProject, error: projectError } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("id", projectId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (projectError || !ownedProject) return "";
+    }
+    // Project knowledge remains available when personal memory is disabled.
+    // buildBrainContext checks the memory setting itself and omits memories.
+    if (!projectId && (!isMemoryEnabled(settings) || settings?.personalization_enabled === false)) {
       return "";
     }
 

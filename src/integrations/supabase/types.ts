@@ -3576,6 +3576,11 @@ export type Database = {
         Row: {
           ai_model: string | null;
           auto_speak: boolean;
+          briefing_dismissed: Json;
+          briefing_enabled: boolean;
+          briefing_focus: string;
+          briefing_time: string;
+          briefing_timezone: string;
           created_at: string;
           default_mode: string;
           notifications_enabled: boolean;
@@ -3587,6 +3592,11 @@ export type Database = {
         Insert: {
           ai_model?: string | null;
           auto_speak?: boolean;
+          briefing_dismissed?: Json;
+          briefing_enabled?: boolean;
+          briefing_focus?: string;
+          briefing_time?: string;
+          briefing_timezone?: string;
           created_at?: string;
           default_mode?: string;
           notifications_enabled?: boolean;
@@ -3598,6 +3608,11 @@ export type Database = {
         Update: {
           ai_model?: string | null;
           auto_speak?: boolean;
+          briefing_dismissed?: Json;
+          briefing_enabled?: boolean;
+          briefing_focus?: string;
+          briefing_time?: string;
+          briefing_timezone?: string;
           created_at?: string;
           default_mode?: string;
           notifications_enabled?: boolean;

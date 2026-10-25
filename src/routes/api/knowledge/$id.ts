@@ -6,7 +6,8 @@ import {
   getSafeErrorMessage,
 } from "@/lib/api-error";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
-import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/api/knowledge/$id")({
   server: {
@@ -14,7 +15,10 @@ export const Route = createFileRoute("/api/knowledge/$id")({
     handlers: {
       GET: async ({ context, params }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const { data, error } = await supabase
             .from("knowledge_chunks")
             .select("*")
@@ -30,7 +34,10 @@ export const Route = createFileRoute("/api/knowledge/$id")({
       },
       DELETE: async ({ context, params }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const { error } = await supabase
             .from("knowledge_sources")
             .delete()

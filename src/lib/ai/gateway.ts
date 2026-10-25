@@ -123,6 +123,9 @@ export function streamChat(
               !emittedText &&
               !signal?.aborted &&
               index < models.length - 1 &&
+              (normalized.kind !== "rate_limit" ||
+                normalized.retryAfterMs === undefined ||
+                normalized.retryAfterMs <= 5_000) &&
               (normalized.kind === "network" ||
                 normalized.kind === "rate_limit" ||
                 normalized.kind === "unavailable" ||
@@ -132,12 +135,19 @@ export function streamChat(
               requestId,
               model: modelId,
               nextModel: models[index + 1],
-              error: normalized.message,
+              provider: "openrouter",
+              category: normalized.kind,
+              providerCode: normalized.providerCode,
               status: normalized.status,
+              retryAfterMs: normalized.retryAfterMs,
               attempt: index + 1,
               durationMs: Date.now() - attemptStartedAt,
               willRetry: canRetry,
             });
+            if (canRetry) {
+              const delayMs = boundedRetryDelay(normalized, index);
+              if (delayMs > 0) await waitForRetry(delayMs, signal);
+            }
           } finally {
             attempt.dispose();
           }
@@ -239,8 +249,11 @@ export function streamChat(
         console.error("Model request error", {
           requestId,
           model: activeModel,
-          error: normalized.message,
+          provider: "openrouter",
+          category: normalized.kind,
+          providerCode: normalized.providerCode,
           status: normalized.status,
+          retryAfterMs: normalized.retryAfterMs,
         });
       } finally {
         console.info("Model request completed", {
@@ -262,13 +275,19 @@ function toLordError(error: OpenRouterError, model: string, requestId: string) {
   const code =
     error.kind === "invalid_api_key"
       ? "AI_AUTH_ERROR"
-      : error.kind === "rate_limit"
-        ? "AI_RATE_LIMITED"
-        : error.kind === "request"
-          ? "AI_BAD_REQUEST"
-          : error.kind === "missing_api_key"
-            ? "AI_NOT_CONFIGURED"
-            : "AI_PROVIDER_UNAVAILABLE";
+      : error.kind === "insufficient_credits"
+        ? "AI_CREDITS_EXHAUSTED"
+        : error.kind === "rate_limit"
+          ? "AI_RATE_LIMITED"
+          : error.kind === "request"
+            ? "AI_BAD_REQUEST"
+            : error.kind === "missing_api_key"
+              ? "AI_NOT_CONFIGURED"
+              : error.kind === "timeout"
+                ? "AI_TIMEOUT"
+                : error.kind === "aborted"
+                  ? "AI_STREAM_INTERRUPTED"
+                  : "AI_PROVIDER_UNAVAILABLE";
   return createLordError({
     code,
     provider: "openrouter",
@@ -276,6 +295,33 @@ function toLordError(error: OpenRouterError, model: string, requestId: string) {
     message: error.message,
     recoverable: error.kind !== "invalid_api_key" && error.kind !== "missing_api_key",
     requestId,
+    retryAfterMs: error.retryAfterMs,
+  });
+}
+
+function boundedRetryDelay(error: OpenRouterError, attempt: number): number {
+  if (error.kind === "rate_limit" && error.retryAfterMs !== undefined) {
+    return error.retryAfterMs;
+  }
+  if (error.kind !== "rate_limit" && error.kind !== "network" && error.kind !== "unavailable") {
+    return 0;
+  }
+  const exponential = Math.min(2_000, 250 * 2 ** attempt);
+  return Math.floor(exponential / 2 + Math.random() * (exponential / 2));
+}
+
+async function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return;
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, delayMs);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
   });
 }
 

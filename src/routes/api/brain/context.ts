@@ -18,7 +18,10 @@ export const Route = createFileRoute("/api/brain/context")({
     handlers: {
       GET: async ({ context, request }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: NonNullable<Parameters<typeof buildBrainContext>[1]>;
+          };
           const url = new URL(request.url);
           const parsed = ContextQuerySchema.safeParse({
             query: url.searchParams.get("query") ?? "",
@@ -35,6 +38,17 @@ export const Route = createFileRoute("/api/brain/context")({
               crypto.randomUUID(),
             );
           }
+          if (parsed.data.projectId) {
+            const { data: ownedProject, error } = await supabase
+              .from("projects")
+              .select("id")
+              .eq("id", parsed.data.projectId)
+              .eq("user_id", userId)
+              .maybeSingle();
+            if (error || !ownedProject) {
+              return apiErrorResponse(404, "NOT_FOUND", "Project not found", crypto.randomUUID());
+            }
+          }
           const opts: BrainContextOptions = {
             userId,
             projectId: parsed.data.projectId ?? null,
@@ -43,7 +57,7 @@ export const Route = createFileRoute("/api/brain/context")({
             maxKnowledgeChunks: parsed.data.maxKnowledgeChunks,
             maxRecentChats: parsed.data.maxRecentChats,
           };
-          const result = await buildBrainContext(opts);
+          const result = await buildBrainContext(opts, supabase);
           return apiOkResponse(result);
         } catch (err) {
           return apiErrorResponse(500, "DB_ERROR", getSafeErrorMessage(err), crypto.randomUUID());

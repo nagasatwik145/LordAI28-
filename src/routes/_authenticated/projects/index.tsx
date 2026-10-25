@@ -9,6 +9,9 @@ import {
   Pin,
   Archive,
   RefreshCw,
+  Copy,
+  Search,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -74,6 +77,10 @@ function ProjectsPage() {
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(COLORS[0]);
   const [icon, setIcon] = useState(ICONS[0]);
+  const [filter, setFilter] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [sortBy, setSortBy] = useState<"recent" | "name">("recent");
+  const [renameProject, setRenameProject] = useState<{ id: string; name: string } | null>(null);
 
   const projectsQuery = useProjects(user?.id);
   const { data: projects, isLoading, isError, error, refetch, isFetching } = projectsQuery;
@@ -125,6 +132,47 @@ function ProjectsPage() {
       await updateProject.mutateAsync({ id: project.id, patch: { is_pinned: !project.is_pinned } });
     } catch {
       toast.error("Failed to update project");
+    }
+  };
+
+  const visibleProjects = (projects ?? [])
+    .filter((project) => project.is_archived === showArchived)
+    .filter((project) =>
+      `${project.name} ${project.description ?? ""}`.toLowerCase().includes(filter.toLowerCase()),
+    )
+    .sort((a, b) =>
+      sortBy === "name"
+        ? a.name.localeCompare(b.name)
+        : Number(b.is_pinned) - Number(a.is_pinned) ||
+          b.last_accessed_at.localeCompare(a.last_accessed_at),
+    );
+
+  const duplicateProject = async (project: NonNullable<typeof projects>[number]) => {
+    try {
+      const copy = await createProject.mutateAsync({
+        name: `${project.name} copy`,
+        description: project.description ?? undefined,
+        color: project.color,
+        icon: project.icon,
+      });
+      toast.success("Project duplicated");
+      window.location.assign(`/projects/${copy.id}`);
+    } catch {
+      toast.error("Could not duplicate project");
+    }
+  };
+
+  const saveRename = async () => {
+    if (!renameProject || !renameProject.name.trim()) return;
+    try {
+      await updateProject.mutateAsync({
+        id: renameProject.id,
+        patch: { name: renameProject.name.trim() },
+      });
+      setRenameProject(null);
+      toast.success("Project renamed");
+    } catch {
+      toast.error("Could not rename project");
     }
   };
 
@@ -207,6 +255,45 @@ function ProjectsPage() {
           </Dialog>
         </div>
 
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search projects"
+              className="pl-9 pr-9"
+              placeholder="Search projects…"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+            />
+            {filter && (
+              <button
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                onClick={() => setFilter("")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={showArchived ? "secondary" : "outline"}
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              {showArchived ? "Archived" : "Recent projects"}
+            </Button>
+            <select
+              aria-label="Sort projects"
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as "recent" | "name")}
+              className="rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="recent">Recently active</option>
+              <option value="name">Name</option>
+            </select>
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -229,9 +316,9 @@ function ProjectsPage() {
               {isFetching ? "Retrying…" : "Retry"}
             </Button>
           </Card>
-        ) : projects && projects.length > 0 ? (
+        ) : visibleProjects.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
+            {visibleProjects.map((project) => (
               <Card
                 key={project.id}
                 className="group relative cursor-pointer transition-all hover:border-primary/50 hover:shadow-lg"
@@ -264,6 +351,24 @@ function ProjectsPage() {
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
+                          setRenameProject({ id: project.id, name: project.name });
+                        }}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void duplicateProject(project);
+                        }}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
                           togglePin(project);
                         }}
                       >
@@ -273,12 +378,31 @@ function ProjectsPage() {
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
+                          void updateProject
+                            .mutateAsync({
+                              id: project.id,
+                              patch: { is_archived: !project.is_archived },
+                            })
+                            .then(() =>
+                              toast.success(
+                                project.is_archived ? "Project restored" : "Project archived",
+                              ),
+                            )
+                            .catch(() => toast.error("Could not update project"));
+                        }}
+                      >
+                        <Archive className="mr-2 h-4 w-4" />
+                        {project.is_archived ? "Restore" : "Archive"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleDelete(project.id);
                         }}
                         className="text-destructive"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
+                        Delete permanently
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -295,7 +419,13 @@ function ProjectsPage() {
         ) : (
           <Card className="flex flex-col items-center justify-center py-20">
             <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold text-white mb-1">No projects yet</h3>
+            <h3 className="text-lg font-semibold text-white mb-1">
+              {showArchived
+                ? "No archived projects"
+                : filter
+                  ? "No matching projects"
+                  : "No projects yet"}
+            </h3>
             <p className="text-sm text-muted-foreground mb-4">
               Create your first project to start building your AI workspace.
             </p>
@@ -305,6 +435,33 @@ function ProjectsPage() {
           </Card>
         )}
       </div>
+      <Dialog
+        open={!!renameProject}
+        onOpenChange={(value) => {
+          if (!value) setRenameProject(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename project</DialogTitle>
+          </DialogHeader>
+          <Input
+            aria-label="Project name"
+            value={renameProject?.name ?? ""}
+            onChange={(event) =>
+              setRenameProject((current) =>
+                current ? { ...current, name: event.target.value } : current,
+              )
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void saveRename();
+            }}
+          />
+          <Button onClick={() => void saveRename()} disabled={!renameProject?.name.trim()}>
+            Save name
+          </Button>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

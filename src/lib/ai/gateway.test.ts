@@ -71,6 +71,25 @@ describe("streamChat", () => {
     expect(body).toContain("Lord is ready.");
   });
 
+  it("honors a Retry-After longer than the bounded fallback window", async () => {
+    mocks.streamChat.mockImplementationOnce(async function* () {
+      yield "";
+      throw new OpenRouterError("rate_limit", 429, undefined, { retryAfterMs: 6_000 });
+    });
+
+    const response = streamChat(
+      [{ role: "user", content: "hello" }],
+      undefined,
+      ["limited-model:free", "fallback-model:free"],
+      "00000000-0000-4000-8000-000000000007",
+    );
+    const body = await response.text();
+
+    expect(mocks.streamChat).toHaveBeenCalledTimes(1);
+    expect(body).toContain("retryAfterMs");
+    expect(body).toContain("6000");
+  });
+
   it("treats an empty model stream as unavailable and retries", async () => {
     mocks.streamChat
       .mockImplementationOnce(() => tokens())

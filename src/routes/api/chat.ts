@@ -283,18 +283,13 @@ export const Route = createFileRoute("/api/chat")({
             });
           }
 
+          // An explicit model choice is a contract with the user. Do not turn
+          // a provider failure for that model into an implicit model switch.
+          // Automatic fallback remains available for routed (non-explicit)
+          // requests, where every candidate is already filtered by entitlement
+          // and attachment capability.
           const fallbackRankedModelCandidates = requestedModelId
-            ? [
-                ...rankedModelCandidates,
-                ...[...CHAT_MODEL_MAP.values()]
-                  .filter(
-                    (model) =>
-                      allowedModelIds.has(model.id) &&
-                      (!hasMultimodal || model.capabilities.supportsVision),
-                  )
-                  .sort((a, b) => a.metadata.priority - b.metadata.priority)
-                  .map((model) => model.id),
-              ]
+            ? [requestedModelId]
             : rankedModelCandidates;
           const availableFallbackIds = preferAvailableModels(
             fallbackRankedModelCandidates
@@ -616,6 +611,7 @@ function getGatewayErrorStatus(error: unknown): number {
   if (isAIConfigurationError(error)) return 503;
   if (isOpenRouterError(error)) {
     if (error.kind === "invalid_api_key") return 401;
+    if (error.kind === "insufficient_credits") return 402;
     if (error.kind === "rate_limit") return 429;
     if (error.kind === "request") return 400;
   }
@@ -627,12 +623,14 @@ function getGatewayErrorCode(
 ):
   | "AI_NOT_CONFIGURED"
   | "AI_AUTH_ERROR"
+  | "AI_CREDITS_EXHAUSTED"
   | "AI_RATE_LIMITED"
   | "AI_BAD_REQUEST"
   | "AI_UPSTREAM_ERROR" {
   if (isAIConfigurationError(error)) return "AI_NOT_CONFIGURED";
   if (error instanceof OpenRouterError) {
     if (error.kind === "invalid_api_key") return "AI_AUTH_ERROR";
+    if (error.kind === "insufficient_credits") return "AI_CREDITS_EXHAUSTED";
     if (error.kind === "rate_limit") return "AI_RATE_LIMITED";
     if (error.kind === "request") return "AI_BAD_REQUEST";
   }

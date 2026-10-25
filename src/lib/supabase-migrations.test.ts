@@ -5,6 +5,23 @@ import { describe, expect, it } from "vitest";
 const migrationsDirectory = resolve(process.cwd(), "supabase/migrations");
 
 describe("production Supabase migrations", () => {
+  it("keeps LORD feature migration versions unique", () => {
+    const featureMigrations = [
+      "20261025040000_personal_tutor.sql",
+      "20261025050000_lord_community.sql",
+      "20261025050100_lord_daily_briefing.sql",
+      "20261025060000_lord_knowledge_graph.sql",
+      "20261025060100_lord_project_file_storage.sql",
+      "20261025070000_developer_lab_sessions.sql",
+    ];
+    const versions = featureMigrations.map((filename) => filename.slice(0, 14));
+
+    expect(new Set(versions).size).toBe(versions.length);
+    for (const filename of featureMigrations) {
+      expect(readFileSync(resolve(migrationsDirectory, filename), "utf8")).toBeTruthy();
+    }
+  });
+
   it("repairs every user setting column selected by the application without dropping data", () => {
     const migration = readFileSync(
       resolve(migrationsDirectory, "20261018010000_repair_user_settings_preferences.sql"),
@@ -129,6 +146,21 @@ describe("production Supabase migrations", () => {
       /CREATE UNIQUE INDEX IF NOT EXISTS autopilot_missions_user_idempotency_idx/i,
     );
     expect(migration).not.toMatch(/DROP\s+(?:TABLE|COLUMN)|DELETE\s+FROM/i);
+  });
+
+  it("stores Developer Lab sessions with row-level owner isolation", () => {
+    const migration = readFileSync(
+      resolve(migrationsDirectory, "20261025070000_developer_lab_sessions.sql"),
+      "utf8",
+    );
+    expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.developer_lab_sessions/i);
+    expect(migration).toMatch(
+      /ALTER TABLE public\.developer_lab_sessions ENABLE ROW LEVEL SECURITY/i,
+    );
+    expect(migration.match(/auth\.uid\(\) = user_id/gi)).toHaveLength(3);
+    expect(migration).toMatch(/FOR SELECT[\s\S]*?auth\.uid\(\) = user_id/i);
+    expect(migration).toMatch(/FOR INSERT[\s\S]*?WITH CHECK \(auth\.uid\(\) = user_id\)/i);
+    expect(migration).not.toMatch(/FOR UPDATE/i);
   });
 
   it("stores PhonePe orders privately and activates an entitlement atomically", () => {

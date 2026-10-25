@@ -47,6 +47,12 @@ export function GlobalFooter() {
           <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground sm:flex-row sm:gap-4">
             <span>Made by Karnala Naga Satwik</span>
             <a
+              className="inline-flex min-h-8 items-center transition-colors hover:text-primary"
+              href="/privacy-policy"
+            >
+              Privacy Policy
+            </a>
+            <a
               className="inline-flex min-h-8 items-center gap-1 transition-colors hover:text-primary"
               href={`mailto:${FEEDBACK_EMAIL}`}
             >

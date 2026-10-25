@@ -728,7 +728,15 @@ function ChatPage() {
         .map((part) => (part as { text?: string }).text ?? "")
         .join("");
       const shouldTreatAsError = isError || isUnsafeAssistantError(unsafeCompletedText);
-      void authenticatedFetch("/api/analytics/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: shouldTreatAsError ? "chat_failed" : "chat_succeeded", feature: "chat", ...(shouldTreatAsError ? { category: "provider" } : {}) }) }).catch(() => undefined);
+      void authenticatedFetch("/api/analytics/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: shouldTreatAsError ? "chat_failed" : "chat_succeeded",
+          feature: "chat",
+          ...(shouldTreatAsError ? { category: "provider" } : {}),
+        }),
+      }).catch(() => undefined);
       setProcessingLabel(null);
       if (councilEnabledRef.current && shouldTreatAsError) {
         setCouncilProgress((current) =>
@@ -2593,8 +2601,13 @@ function ChatPage() {
             .map((p) => {
               const partText = (p as { errorText?: string }).errorText ?? "";
               return safeChatErrorMessage(partText);
-            });
-          if (unsafeResponse) {
+            })
+            .filter((message, index, all) => all.indexOf(message) === index)
+            .slice(0, 1);
+          // A streamed provider error is already rendered above with its
+          // request ID. Only add the generic failure when no structured error
+          // part exists, so one failed generation produces one visible error.
+          if (unsafeResponse && errorParts.length === 0) {
             errorParts.push("LORD AI couldn’t complete that response. Retry to continue.");
           }
           const storedSources =
@@ -2913,7 +2926,7 @@ function ChatPage() {
               </li>
             );
           })()}
-        {(persistenceError || storedMessagesError) && !messagesContainErrorPart && (
+        {(persistenceError || storedMessagesError) && !messagesContainErrorPart && !error && (
           <li className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
             <div>
               {persistenceError ??

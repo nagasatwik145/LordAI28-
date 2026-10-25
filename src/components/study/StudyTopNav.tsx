@@ -71,6 +71,14 @@ export function StudyTopNav({ activeView, onViewChange }: StudyTopNavProps) {
               </motion.button>
             );
           })}
+          <a
+            href="/personal-tutor"
+            className="flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-amber-600 transition-colors hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label="Personal Tutor, LORD Pro feature"
+          >
+            <Brain className="h-4 w-4" />
+            Personal Tutor <span className="text-[10px] font-bold">PRO</span>
+          </a>
         </div>
       </div>
     </nav>

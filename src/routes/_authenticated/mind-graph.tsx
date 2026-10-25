@@ -125,6 +125,12 @@ function MindGraphPage() {
   const [editing, setEditing] = useState(false);
   const [editingContent, setEditingContent] = useState("");
   const [editingCategory, setEditingCategory] = useState<MemoryCategory>("note");
+  const [indexing, setIndexing] = useState(false);
+  const [knowledgeQuestion, setKnowledgeQuestion] = useState("");
+  const [knowledgeAnswer, setKnowledgeAnswer] = useState<string | null>(null);
+  const [knowledgeSuggestions, setKnowledgeSuggestions] = useState<
+    { id: string; name: string; source_type: string }[]
+  >([]);
   const svgRef = useRef<SVGSVGElement>(null);
   const { data: settings } = useMemorySettings(user.id);
   const updateMemory = useUpdateMemory(user.id);
@@ -421,6 +427,80 @@ function MindGraphPage() {
     ]);
   };
 
+  const indexKnowledge = async () => {
+    setIndexing(true);
+    try {
+      const response = await fetch("/api/knowledge-graph", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "index" }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Indexing failed");
+      await loadKnowledgeSuggestions();
+      toast.success(`Indexed ${result.indexed} new concepts from ${result.sources} sources`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't index knowledge");
+    } finally {
+      setIndexing(false);
+    }
+  };
+
+  const loadKnowledgeSuggestions = async () => {
+    const response = await fetch("/api/knowledge-graph", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list_pending" }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? "Couldn't load suggestions");
+    setKnowledgeSuggestions(result.suggestions ?? []);
+  };
+
+  const reviewKnowledgeSuggestion = async (
+    id: string,
+    action: "approve" | "dismiss" | "delete",
+  ) => {
+    const response = await fetch("/api/knowledge-graph", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: action === "delete" ? "delete" : "review",
+        entityId: id,
+        status: action === "approve" ? "approved" : "dismissed",
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? "Couldn't update suggestion");
+    setKnowledgeSuggestions((items) => items.filter((item) => item.id !== id));
+  };
+
+  const searchKnowledge = async () => {
+    if (!knowledgeQuestion.trim()) return;
+    setKnowledgeAnswer(null);
+    try {
+      const response = await fetch("/api/knowledge-graph", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "search", query: knowledgeQuestion }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Search failed");
+      setKnowledgeAnswer(
+        result.results.length
+          ? result.results
+              .map(
+                (item: { name: string; source_type: string }) =>
+                  `${item.name} · ${item.source_type}`,
+              )
+              .join("\n")
+          : "No approved indexed concepts match. Index your content and review suggestions first.",
+      );
+    } catch (error) {
+      setKnowledgeAnswer(error instanceof Error ? error.message : "Search failed");
+    }
+  };
+
   return (
     <AppShell>
       <div className="mx-auto max-w-7xl space-y-4">
@@ -450,6 +530,18 @@ function MindGraphPage() {
               ))}
             </select>
           </label>
+          <Button
+            onClick={() => void indexKnowledge()}
+            disabled={indexing}
+            className="min-h-11 gap-2"
+          >
+            {indexing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            {indexing ? "Indexing…" : "Index my knowledge"}
+          </Button>
         </header>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -741,6 +833,76 @@ function MindGraphPage() {
               >
                 {memorySettings?.memory_enabled === false ? "Enable memory" : "Disable memory"}
               </Button>
+            </HudPanel>
+
+            <HudPanel title="Ask indexed knowledge">
+              <div className="space-y-2">
+                <input
+                  value={knowledgeQuestion}
+                  onChange={(event) => setKnowledgeQuestion(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void searchKnowledge();
+                  }}
+                  placeholder="Search approved concepts"
+                  aria-label="Search indexed knowledge"
+                  className="min-h-11 w-full rounded-md border border-border/60 bg-background/40 px-3 text-sm"
+                />
+                <Button
+                  variant="outline"
+                  className="min-h-10 w-full"
+                  onClick={() => void searchKnowledge()}
+                >
+                  Search graph
+                </Button>
+                {knowledgeAnswer && (
+                  <p
+                    className="whitespace-pre-line break-words text-xs text-muted-foreground"
+                    role="status"
+                  >
+                    {knowledgeAnswer}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Search returns approved concepts with source type. New extracted suggestions
+                  require review.
+                </p>
+              </div>
+            </HudPanel>
+
+            <HudPanel title={`Review extracted concepts (${knowledgeSuggestions.length})`}>
+              <Button
+                variant="outline"
+                className="mb-2 min-h-9 w-full"
+                onClick={() => void loadKnowledgeSuggestions()}
+              >
+                Refresh suggestions
+              </Button>
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {knowledgeSuggestions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No pending concepts loaded. Index your knowledge, then refresh.
+                  </p>
+                ) : (
+                  knowledgeSuggestions.map((item) => (
+                    <div key={item.id} className="rounded-md border border-border/50 p-2">
+                      <p className="break-words text-sm">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">From {item.source_type}</p>
+                      <div className="mt-2 grid grid-cols-3 gap-1">
+                        {(["approve", "dismiss", "delete"] as const).map((action) => (
+                          <Button
+                            key={action}
+                            size="sm"
+                            variant={action === "approve" ? "default" : "outline"}
+                            onClick={() => void reviewKnowledgeSuggestion(item.id, action)}
+                          >
+                            {action}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </HudPanel>
 
             <HudPanel title="Node details">

@@ -367,6 +367,7 @@ export function useUpdateNote(
   return useMutation({
     mutationFn: async (input: {
       id: string;
+      expectedUpdatedAt?: string;
       patch: Partial<{
         title: string;
         content: string;
@@ -389,14 +390,18 @@ export function useUpdateNote(
       if (input.patch.isPinned !== undefined) update.is_pinned = input.patch.isPinned;
       if (input.patch.isArchived !== undefined) update.is_archived = input.patch.isArchived;
 
-      const { error } = await supabase
+      let query = supabase
         .from("project_notes")
         .update(update)
         .eq("id", input.id)
         .eq("project_id", projectId)
         .eq("user_id", userId);
+      if (input.expectedUpdatedAt)
+        query = query.eq("updated_at", input.expectedUpdatedAt) as typeof query;
+      const { data, error } = await query.select("id").maybeSingle();
 
       if (error) throw error;
+      if (!data) throw new Error("This note changed elsewhere. Reload it before saving.");
     },
     onMutate: async (input) => {
       if (!userId || !projectId) return;
@@ -548,7 +553,7 @@ export function useUpdateTask(
         priority?: string;
         due_date?: string;
         tags?: string[];
-        completed_at?: string;
+        completed_at?: string | null;
       } = {};
       if (input.patch.title !== undefined) update.title = input.patch.title;
       if (input.patch.description !== undefined) update.description = input.patch.description;
@@ -556,7 +561,9 @@ export function useUpdateTask(
       if (input.patch.priority !== undefined) update.priority = input.patch.priority;
       if (input.patch.dueDate !== undefined) update.due_date = input.patch.dueDate;
       if (input.patch.tags !== undefined) update.tags = input.patch.tags;
-      if (input.patch.status === "done") update.completed_at = new Date().toISOString();
+      if (input.patch.status !== undefined) {
+        update.completed_at = input.patch.status === "done" ? new Date().toISOString() : null;
+      }
 
       const { error } = await supabase
         .from("project_tasks")

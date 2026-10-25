@@ -46,7 +46,7 @@ export class OpenRouterClient {
 
     if (!response.ok) {
       const details = await response.text().catch(() => "");
-      throw errorFromStatus(response.status, details);
+      throw errorFromStatus(response.status, parseProviderError(details), response.headers);
     }
 
     const payload: unknown = await response.json();
@@ -148,7 +148,7 @@ export class OpenRouterClient {
     try {
       if (!response.ok) {
         const details = await readResponseBody(response.body);
-        throw errorFromStatus(response.status, details);
+        throw errorFromStatus(response.status, parseProviderError(details), response.headers);
       }
 
       yield* this.readEventStream(response.body);
@@ -234,6 +234,18 @@ function parseSseLine(line: string): OpenRouterStreamEvent | null | undefined {
   } catch (error) {
     if (error instanceof OpenRouterError) throw error;
     throw new OpenRouterError("malformed_response", undefined, error);
+  }
+}
+
+/** Keep provider diagnostics structured without retaining or logging raw bodies. */
+function parseProviderError(body: string): unknown {
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const error = (parsed as { error?: unknown }).error;
+    return error && typeof error === "object" ? { error } : parsed;
+  } catch {
+    return undefined;
   }
 }
 

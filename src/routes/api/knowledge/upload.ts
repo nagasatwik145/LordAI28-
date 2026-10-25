@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { apiOkResponse, apiErrorResponse, getSafeErrorMessage } from "@/lib/api-error";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
-import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const UploadSchema = z.object({
   name: z.string().min(1).max(200),
@@ -20,7 +21,10 @@ export const Route = createFileRoute("/api/knowledge/upload")({
     handlers: {
       POST: async ({ request, context }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const body = await request.json();
           const parsed = UploadSchema.safeParse(body);
           if (!parsed.success) {
@@ -30,6 +34,18 @@ export const Route = createFileRoute("/api/knowledge/upload")({
               parsed.error.message,
               crypto.randomUUID(),
             );
+          }
+          if (parsed.data.projectId) {
+            const { data: project, error: projectError } = await supabase
+              .from("projects")
+              .select("id")
+              .eq("id", parsed.data.projectId)
+              .eq("user_id", userId)
+              .maybeSingle();
+            if (projectError) throw projectError;
+            if (!project) {
+              return apiErrorResponse(404, "NOT_FOUND", "Project not found", crypto.randomUUID());
+            }
           }
           const { data, error } = await supabase
             .from("knowledge_sources")

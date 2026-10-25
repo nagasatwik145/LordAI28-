@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedAnythingStudioRouteImport } from './routes/_authenticated/anything-studio'
@@ -19,17 +20,21 @@ import { Route as AuthenticatedBoardsRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedCommandCenterRouteRouteImport } from './routes/_authenticated/command-center/route'
+import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as AuthenticatedCreateApkaJalwaRouteImport } from './routes/_authenticated/create-apka-jalwa'
+import { Route as AuthenticatedDeveloperLabRouteImport } from './routes/_authenticated/developer-lab'
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
 import { Route as AuthenticatedFeedRouteImport } from './routes/_authenticated/feed'
 import { Route as AuthenticatedImagesRouteImport } from './routes/_authenticated/images'
 import { Route as AuthenticatedLearnRouteImport } from './routes/_authenticated/learn'
 import { Route as AuthenticatedMemoryRouteImport } from './routes/_authenticated/memory'
 import { Route as AuthenticatedMindGraphRouteImport } from './routes/_authenticated/mind-graph'
+import { Route as AuthenticatedPersonalTutorRouteImport } from './routes/_authenticated/personal-tutor'
 import { Route as AuthenticatedPlanRouteImport } from './routes/_authenticated/plan'
 import { Route as AuthenticatedPracticeRouteImport } from './routes/_authenticated/practice'
 import { Route as AuthenticatedProductivityRouteImport } from './routes/_authenticated/productivity'
 import { Route as AuthenticatedProgressRouteImport } from './routes/_authenticated/progress'
+import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedStatisticsRouteImport } from './routes/_authenticated/statistics'
@@ -40,17 +45,22 @@ import { Route as AuthenticatedVoiceRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedWhatIfRouteImport } from './routes/_authenticated/what-if'
 import { Route as ApiAnythingStudioRouteImport } from './routes/api/anything-studio'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiCommunityRouteImport } from './routes/api/community'
+import { Route as ApiDeveloperLabRouteImport } from './routes/api/developer-lab'
 import { Route as ApiGamesRouteImport } from './routes/api/games'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiHealthCenterRouteImport } from './routes/api/health-center'
 import { Route as ApiImagesRouteImport } from './routes/api/images'
+import { Route as ApiKnowledgeGraphRouteImport } from './routes/api/knowledge-graph'
 import { Route as ApiMissionsRouteImport } from './routes/api/missions'
 import { Route as ApiModelsRouteImport } from './routes/api/models'
 import { Route as ApiOpenrouterTestRouteImport } from './routes/api/openrouter-test'
+import { Route as ApiPersonalTutorRouteImport } from './routes/api/personal-tutor'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as ApiSharesRouteImport } from './routes/api/shares'
 import { Route as ApiTitleRouteImport } from './routes/api/title'
 import { Route as ApiWhatIfRouteImport } from './routes/api/what-if'
+import { Route as CommunitySlugRouteImport } from './routes/community/$slug'
 import { Route as ShareTokenRouteImport } from './routes/share/$token'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin/analytics'
 import { Route as AuthenticatedCanvasIndexRouteImport } from './routes/_authenticated/canvas/index'
@@ -86,6 +96,7 @@ import { Route as ApiCanvasVersionsRouteImport } from './routes/api/canvas/versi
 import { Route as ApiChatOcrRouteImport } from './routes/api/chat/ocr'
 import { Route as ApiCommandPaletteSearchRouteImport } from './routes/api/command-palette/search'
 import { Route as ApiDashboardsIndexRouteImport } from './routes/api/dashboards/index'
+import { Route as ApiDeveloperLabHistoryRouteImport } from './routes/api/developer-lab/history'
 import { Route as ApiImageHealthRouteImport } from './routes/api/image/health'
 import { Route as ApiImagesIdRouteImport } from './routes/api/images/$id'
 import { Route as ApiImagesModelsRouteImport } from './routes/api/images/models'
@@ -117,11 +128,15 @@ import { Route as ApiLordToolRouteImport } from './routes/api/lord/tool'
 import { Route as ApiObservabilityHealthRouteImport } from './routes/api/observability/health'
 import { Route as ApiProjectsIndexRouteImport } from './routes/api/projects/index'
 import { Route as ApiProjectsIdRouteImport } from './routes/api/projects/$id'
+import { Route as ApiResearchIndexRouteImport } from './routes/api/research/index'
 import { Route as ApiSharedTokenRouteImport } from './routes/api/shared/$token'
 import { Route as ApiSharesTokenRouteImport } from './routes/api/shares/$token'
 import { Route as ApiStudyPlansIndexRouteImport } from './routes/api/study-plans/index'
 import { Route as ApiStudyPlansIdRouteImport } from './routes/api/study-plans/$id'
 import { Route as ApiVoiceMissionsRouteImport } from './routes/api/voice/missions'
+import { Route as CommunityCreatorsNameRouteImport } from './routes/community/creators/$name'
+import { Route as ApiCommunityCreatorsNameRouteImport } from './routes/api/community/creators/$name'
+import { Route as ApiCommunityPublicSlugRouteImport } from './routes/api/community/public/$slug'
 import { Route as ApiLearningSourcesIngestRouteImport } from './routes/api/learning/sources/ingest'
 import { Route as ApiLordAgentExecuteRouteImport } from './routes/api/lord/agent/execute'
 import { Route as ApiLordAgentStopRouteImport } from './routes/api/lord/agent/stop'
@@ -153,6 +168,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -192,10 +212,21 @@ const AuthenticatedCommandCenterRouteRoute =
     path: '/command-center',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCommunityRoute = AuthenticatedCommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCreateApkaJalwaRoute =
   AuthenticatedCreateApkaJalwaRouteImport.update({
     id: '/create-apka-jalwa',
     path: '/create-apka-jalwa',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedDeveloperLabRoute =
+  AuthenticatedDeveloperLabRouteImport.update({
+    id: '/developer-lab',
+    path: '/developer-lab',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedDocumentsRoute = AuthenticatedDocumentsRouteImport.update({
@@ -228,6 +259,12 @@ const AuthenticatedMindGraphRoute = AuthenticatedMindGraphRouteImport.update({
   path: '/mind-graph',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPersonalTutorRoute =
+  AuthenticatedPersonalTutorRouteImport.update({
+    id: '/personal-tutor',
+    path: '/personal-tutor',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPlanRoute = AuthenticatedPlanRouteImport.update({
   id: '/plan',
   path: '/plan',
@@ -247,6 +284,11 @@ const AuthenticatedProductivityRoute =
 const AuthenticatedProgressRoute = AuthenticatedProgressRouteImport.update({
   id: '/progress',
   path: '/progress',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedResearchRoute = AuthenticatedResearchRouteImport.update({
+  id: '/research',
+  path: '/research',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
@@ -299,6 +341,16 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCommunityRoute = ApiCommunityRouteImport.update({
+  id: '/api/community',
+  path: '/api/community',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDeveloperLabRoute = ApiDeveloperLabRouteImport.update({
+  id: '/api/developer-lab',
+  path: '/api/developer-lab',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGamesRoute = ApiGamesRouteImport.update({
   id: '/api/games',
   path: '/api/games',
@@ -319,6 +371,11 @@ const ApiImagesRoute = ApiImagesRouteImport.update({
   path: '/api/images',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiKnowledgeGraphRoute = ApiKnowledgeGraphRouteImport.update({
+  id: '/api/knowledge-graph',
+  path: '/api/knowledge-graph',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMissionsRoute = ApiMissionsRouteImport.update({
   id: '/api/missions',
   path: '/api/missions',
@@ -332,6 +389,11 @@ const ApiModelsRoute = ApiModelsRouteImport.update({
 const ApiOpenrouterTestRoute = ApiOpenrouterTestRouteImport.update({
   id: '/api/openrouter-test',
   path: '/api/openrouter-test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPersonalTutorRoute = ApiPersonalTutorRouteImport.update({
+  id: '/api/personal-tutor',
+  path: '/api/personal-tutor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSearchRoute = ApiSearchRouteImport.update({
@@ -352,6 +414,11 @@ const ApiTitleRoute = ApiTitleRouteImport.update({
 const ApiWhatIfRoute = ApiWhatIfRouteImport.update({
   id: '/api/what-if',
   path: '/api/what-if',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunitySlugRoute = CommunitySlugRouteImport.update({
+  id: '/community/$slug',
+  path: '/community/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShareTokenRoute = ShareTokenRouteImport.update({
@@ -545,6 +612,11 @@ const ApiDashboardsIndexRoute = ApiDashboardsIndexRouteImport.update({
   path: '/api/dashboards/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDeveloperLabHistoryRoute = ApiDeveloperLabHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => ApiDeveloperLabRoute,
+} as any)
 const ApiImageHealthRoute = ApiImageHealthRouteImport.update({
   id: '/api/image/health',
   path: '/api/image/health',
@@ -701,6 +773,11 @@ const ApiProjectsIdRoute = ApiProjectsIdRouteImport.update({
   path: '/api/projects/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiResearchIndexRoute = ApiResearchIndexRouteImport.update({
+  id: '/api/research/',
+  path: '/api/research/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSharedTokenRoute = ApiSharedTokenRouteImport.update({
   id: '/api/shared/$token',
   path: '/api/shared/$token',
@@ -725,6 +802,22 @@ const ApiVoiceMissionsRoute = ApiVoiceMissionsRouteImport.update({
   id: '/api/voice/missions',
   path: '/api/voice/missions',
   getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityCreatorsNameRoute = CommunityCreatorsNameRouteImport.update({
+  id: '/community/creators/$name',
+  path: '/community/creators/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommunityCreatorsNameRoute =
+  ApiCommunityCreatorsNameRouteImport.update({
+    id: '/creators/$name',
+    path: '/creators/$name',
+    getParentRoute: () => ApiCommunityRoute,
+  } as any)
+const ApiCommunityPublicSlugRoute = ApiCommunityPublicSlugRouteImport.update({
+  id: '/public/$slug',
+  path: '/public/$slug',
+  getParentRoute: () => ApiCommunityRoute,
 } as any)
 const ApiLearningSourcesIngestRoute =
   ApiLearningSourcesIngestRouteImport.update({
@@ -827,6 +920,7 @@ const ApiStudyPlansIdTasksTaskIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/command-center': typeof AuthenticatedCommandCenterRouteRouteWithChildren
@@ -834,17 +928,21 @@ export interface FileRoutesByFullPath {
   '/boards': typeof AuthenticatedBoardsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/community': typeof AuthenticatedCommunityRoute
   '/create-apka-jalwa': typeof AuthenticatedCreateApkaJalwaRoute
+  '/developer-lab': typeof AuthenticatedDeveloperLabRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/feed': typeof AuthenticatedFeedRoute
   '/images': typeof AuthenticatedImagesRoute
   '/learn': typeof AuthenticatedLearnRoute
   '/memory': typeof AuthenticatedMemoryRoute
   '/mind-graph': typeof AuthenticatedMindGraphRoute
+  '/personal-tutor': typeof AuthenticatedPersonalTutorRoute
   '/plan': typeof AuthenticatedPlanRoute
   '/practice': typeof AuthenticatedPracticeRoute
   '/productivity': typeof AuthenticatedProductivityRoute
   '/progress': typeof AuthenticatedProgressRoute
+  '/research': typeof AuthenticatedResearchRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/statistics': typeof AuthenticatedStatisticsRoute
@@ -855,17 +953,22 @@ export interface FileRoutesByFullPath {
   '/what-if': typeof AuthenticatedWhatIfRoute
   '/api/anything-studio': typeof ApiAnythingStudioRoute
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/developer-lab': typeof ApiDeveloperLabRouteWithChildren
   '/api/games': typeof ApiGamesRoute
   '/api/health': typeof ApiHealthRoute
   '/api/health-center': typeof ApiHealthCenterRoute
   '/api/images': typeof ApiImagesRouteWithChildren
+  '/api/knowledge-graph': typeof ApiKnowledgeGraphRoute
   '/api/missions': typeof ApiMissionsRoute
   '/api/models': typeof ApiModelsRoute
   '/api/openrouter-test': typeof ApiOpenrouterTestRoute
+  '/api/personal-tutor': typeof ApiPersonalTutorRoute
   '/api/search': typeof ApiSearchRoute
   '/api/shares': typeof ApiSharesRouteWithChildren
   '/api/title': typeof ApiTitleRoute
   '/api/what-if': typeof ApiWhatIfRoute
+  '/community/$slug': typeof CommunitySlugRoute
   '/share/$token': typeof ShareTokenRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/canvas/$id': typeof AuthenticatedCanvasIdRoute
@@ -893,6 +996,7 @@ export interface FileRoutesByFullPath {
   '/api/canvas/versions': typeof ApiCanvasVersionsRoute
   '/api/chat/ocr': typeof ApiChatOcrRoute
   '/api/command-palette/search': typeof ApiCommandPaletteSearchRoute
+  '/api/developer-lab/history': typeof ApiDeveloperLabHistoryRoute
   '/api/image/health': typeof ApiImageHealthRoute
   '/api/images/$id': typeof ApiImagesIdRoute
   '/api/images/models': typeof ApiImagesModelsRoute
@@ -926,6 +1030,7 @@ export interface FileRoutesByFullPath {
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
+  '/community/creators/$name': typeof CommunityCreatorsNameRoute
   '/canvas/': typeof AuthenticatedCanvasIndexRoute
   '/command-center/': typeof AuthenticatedCommandCenterIndexRoute
   '/dashboards/': typeof AuthenticatedDashboardsIndexRoute
@@ -936,7 +1041,10 @@ export interface FileRoutesByFullPath {
   '/api/dashboards/': typeof ApiDashboardsIndexRoute
   '/api/knowledge/': typeof ApiKnowledgeIndexRoute
   '/api/projects/': typeof ApiProjectsIndexRoute
+  '/api/research/': typeof ApiResearchIndexRoute
   '/api/study-plans/': typeof ApiStudyPlansIndexRoute
+  '/api/community/creators/$name': typeof ApiCommunityCreatorsNameRoute
+  '/api/community/public/$slug': typeof ApiCommunityPublicSlugRoute
   '/api/learning/sources/ingest': typeof ApiLearningSourcesIngestRoute
   '/api/lord/agent/execute': typeof ApiLordAgentExecuteRoute
   '/api/lord/agent/stop': typeof ApiLordAgentStopRoute
@@ -959,23 +1067,28 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/anything-studio': typeof AuthenticatedAnythingStudioRoute
   '/boards': typeof AuthenticatedBoardsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/community': typeof AuthenticatedCommunityRoute
   '/create-apka-jalwa': typeof AuthenticatedCreateApkaJalwaRoute
+  '/developer-lab': typeof AuthenticatedDeveloperLabRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/feed': typeof AuthenticatedFeedRoute
   '/images': typeof AuthenticatedImagesRoute
   '/learn': typeof AuthenticatedLearnRoute
   '/memory': typeof AuthenticatedMemoryRoute
   '/mind-graph': typeof AuthenticatedMindGraphRoute
+  '/personal-tutor': typeof AuthenticatedPersonalTutorRoute
   '/plan': typeof AuthenticatedPlanRoute
   '/practice': typeof AuthenticatedPracticeRoute
   '/productivity': typeof AuthenticatedProductivityRoute
   '/progress': typeof AuthenticatedProgressRoute
+  '/research': typeof AuthenticatedResearchRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/statistics': typeof AuthenticatedStatisticsRoute
@@ -986,17 +1099,22 @@ export interface FileRoutesByTo {
   '/what-if': typeof AuthenticatedWhatIfRoute
   '/api/anything-studio': typeof ApiAnythingStudioRoute
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/developer-lab': typeof ApiDeveloperLabRouteWithChildren
   '/api/games': typeof ApiGamesRoute
   '/api/health': typeof ApiHealthRoute
   '/api/health-center': typeof ApiHealthCenterRoute
   '/api/images': typeof ApiImagesRouteWithChildren
+  '/api/knowledge-graph': typeof ApiKnowledgeGraphRoute
   '/api/missions': typeof ApiMissionsRoute
   '/api/models': typeof ApiModelsRoute
   '/api/openrouter-test': typeof ApiOpenrouterTestRoute
+  '/api/personal-tutor': typeof ApiPersonalTutorRoute
   '/api/search': typeof ApiSearchRoute
   '/api/shares': typeof ApiSharesRouteWithChildren
   '/api/title': typeof ApiTitleRoute
   '/api/what-if': typeof ApiWhatIfRoute
+  '/community/$slug': typeof CommunitySlugRoute
   '/share/$token': typeof ShareTokenRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/canvas/$id': typeof AuthenticatedCanvasIdRoute
@@ -1024,6 +1142,7 @@ export interface FileRoutesByTo {
   '/api/canvas/versions': typeof ApiCanvasVersionsRoute
   '/api/chat/ocr': typeof ApiChatOcrRoute
   '/api/command-palette/search': typeof ApiCommandPaletteSearchRoute
+  '/api/developer-lab/history': typeof ApiDeveloperLabHistoryRoute
   '/api/image/health': typeof ApiImageHealthRoute
   '/api/images/$id': typeof ApiImagesIdRoute
   '/api/images/models': typeof ApiImagesModelsRoute
@@ -1057,6 +1176,7 @@ export interface FileRoutesByTo {
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
+  '/community/creators/$name': typeof CommunityCreatorsNameRoute
   '/canvas': typeof AuthenticatedCanvasIndexRoute
   '/command-center': typeof AuthenticatedCommandCenterIndexRoute
   '/dashboards': typeof AuthenticatedDashboardsIndexRoute
@@ -1067,7 +1187,10 @@ export interface FileRoutesByTo {
   '/api/dashboards': typeof ApiDashboardsIndexRoute
   '/api/knowledge': typeof ApiKnowledgeIndexRoute
   '/api/projects': typeof ApiProjectsIndexRoute
+  '/api/research': typeof ApiResearchIndexRoute
   '/api/study-plans': typeof ApiStudyPlansIndexRoute
+  '/api/community/creators/$name': typeof ApiCommunityCreatorsNameRoute
+  '/api/community/public/$slug': typeof ApiCommunityPublicSlugRoute
   '/api/learning/sources/ingest': typeof ApiLearningSourcesIngestRoute
   '/api/lord/agent/execute': typeof ApiLordAgentExecuteRoute
   '/api/lord/agent/stop': typeof ApiLordAgentStopRoute
@@ -1092,6 +1215,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/command-center': typeof AuthenticatedCommandCenterRouteRouteWithChildren
@@ -1099,17 +1223,21 @@ export interface FileRoutesById {
   '/_authenticated/boards': typeof AuthenticatedBoardsRoute
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
+  '/_authenticated/community': typeof AuthenticatedCommunityRoute
   '/_authenticated/create-apka-jalwa': typeof AuthenticatedCreateApkaJalwaRoute
+  '/_authenticated/developer-lab': typeof AuthenticatedDeveloperLabRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
   '/_authenticated/feed': typeof AuthenticatedFeedRoute
   '/_authenticated/images': typeof AuthenticatedImagesRoute
   '/_authenticated/learn': typeof AuthenticatedLearnRoute
   '/_authenticated/memory': typeof AuthenticatedMemoryRoute
   '/_authenticated/mind-graph': typeof AuthenticatedMindGraphRoute
+  '/_authenticated/personal-tutor': typeof AuthenticatedPersonalTutorRoute
   '/_authenticated/plan': typeof AuthenticatedPlanRoute
   '/_authenticated/practice': typeof AuthenticatedPracticeRoute
   '/_authenticated/productivity': typeof AuthenticatedProductivityRoute
   '/_authenticated/progress': typeof AuthenticatedProgressRoute
+  '/_authenticated/research': typeof AuthenticatedResearchRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/statistics': typeof AuthenticatedStatisticsRoute
@@ -1120,17 +1248,22 @@ export interface FileRoutesById {
   '/_authenticated/what-if': typeof AuthenticatedWhatIfRoute
   '/api/anything-studio': typeof ApiAnythingStudioRoute
   '/api/chat': typeof ApiChatRouteWithChildren
+  '/api/community': typeof ApiCommunityRouteWithChildren
+  '/api/developer-lab': typeof ApiDeveloperLabRouteWithChildren
   '/api/games': typeof ApiGamesRoute
   '/api/health': typeof ApiHealthRoute
   '/api/health-center': typeof ApiHealthCenterRoute
   '/api/images': typeof ApiImagesRouteWithChildren
+  '/api/knowledge-graph': typeof ApiKnowledgeGraphRoute
   '/api/missions': typeof ApiMissionsRoute
   '/api/models': typeof ApiModelsRoute
   '/api/openrouter-test': typeof ApiOpenrouterTestRoute
+  '/api/personal-tutor': typeof ApiPersonalTutorRoute
   '/api/search': typeof ApiSearchRoute
   '/api/shares': typeof ApiSharesRouteWithChildren
   '/api/title': typeof ApiTitleRoute
   '/api/what-if': typeof ApiWhatIfRoute
+  '/community/$slug': typeof CommunitySlugRoute
   '/share/$token': typeof ShareTokenRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/canvas/$id': typeof AuthenticatedCanvasIdRoute
@@ -1158,6 +1291,7 @@ export interface FileRoutesById {
   '/api/canvas/versions': typeof ApiCanvasVersionsRoute
   '/api/chat/ocr': typeof ApiChatOcrRoute
   '/api/command-palette/search': typeof ApiCommandPaletteSearchRoute
+  '/api/developer-lab/history': typeof ApiDeveloperLabHistoryRoute
   '/api/image/health': typeof ApiImageHealthRoute
   '/api/images/$id': typeof ApiImagesIdRoute
   '/api/images/models': typeof ApiImagesModelsRoute
@@ -1191,6 +1325,7 @@ export interface FileRoutesById {
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
+  '/community/creators/$name': typeof CommunityCreatorsNameRoute
   '/_authenticated/canvas/': typeof AuthenticatedCanvasIndexRoute
   '/_authenticated/command-center/': typeof AuthenticatedCommandCenterIndexRoute
   '/_authenticated/dashboards/': typeof AuthenticatedDashboardsIndexRoute
@@ -1201,7 +1336,10 @@ export interface FileRoutesById {
   '/api/dashboards/': typeof ApiDashboardsIndexRoute
   '/api/knowledge/': typeof ApiKnowledgeIndexRoute
   '/api/projects/': typeof ApiProjectsIndexRoute
+  '/api/research/': typeof ApiResearchIndexRoute
   '/api/study-plans/': typeof ApiStudyPlansIndexRoute
+  '/api/community/creators/$name': typeof ApiCommunityCreatorsNameRoute
+  '/api/community/public/$slug': typeof ApiCommunityPublicSlugRoute
   '/api/learning/sources/ingest': typeof ApiLearningSourcesIngestRoute
   '/api/lord/agent/execute': typeof ApiLordAgentExecuteRoute
   '/api/lord/agent/stop': typeof ApiLordAgentStopRoute
@@ -1226,6 +1364,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/privacy-policy'
     | '/reset-password'
     | '/sitemap.xml'
     | '/command-center'
@@ -1233,17 +1372,21 @@ export interface FileRouteTypes {
     | '/boards'
     | '/calendar'
     | '/chat'
+    | '/community'
     | '/create-apka-jalwa'
+    | '/developer-lab'
     | '/documents'
     | '/feed'
     | '/images'
     | '/learn'
     | '/memory'
     | '/mind-graph'
+    | '/personal-tutor'
     | '/plan'
     | '/practice'
     | '/productivity'
     | '/progress'
+    | '/research'
     | '/search'
     | '/settings'
     | '/statistics'
@@ -1254,17 +1397,22 @@ export interface FileRouteTypes {
     | '/what-if'
     | '/api/anything-studio'
     | '/api/chat'
+    | '/api/community'
+    | '/api/developer-lab'
     | '/api/games'
     | '/api/health'
     | '/api/health-center'
     | '/api/images'
+    | '/api/knowledge-graph'
     | '/api/missions'
     | '/api/models'
     | '/api/openrouter-test'
+    | '/api/personal-tutor'
     | '/api/search'
     | '/api/shares'
     | '/api/title'
     | '/api/what-if'
+    | '/community/$slug'
     | '/share/$token'
     | '/admin/analytics'
     | '/canvas/$id'
@@ -1292,6 +1440,7 @@ export interface FileRouteTypes {
     | '/api/canvas/versions'
     | '/api/chat/ocr'
     | '/api/command-palette/search'
+    | '/api/developer-lab/history'
     | '/api/image/health'
     | '/api/images/$id'
     | '/api/images/models'
@@ -1325,6 +1474,7 @@ export interface FileRouteTypes {
     | '/api/shares/$token'
     | '/api/study-plans/$id'
     | '/api/voice/missions'
+    | '/community/creators/$name'
     | '/canvas/'
     | '/command-center/'
     | '/dashboards/'
@@ -1335,7 +1485,10 @@ export interface FileRouteTypes {
     | '/api/dashboards/'
     | '/api/knowledge/'
     | '/api/projects/'
+    | '/api/research/'
     | '/api/study-plans/'
+    | '/api/community/creators/$name'
+    | '/api/community/public/$slug'
     | '/api/learning/sources/ingest'
     | '/api/lord/agent/execute'
     | '/api/lord/agent/stop'
@@ -1358,23 +1511,28 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/privacy-policy'
     | '/reset-password'
     | '/sitemap.xml'
     | '/anything-studio'
     | '/boards'
     | '/calendar'
     | '/chat'
+    | '/community'
     | '/create-apka-jalwa'
+    | '/developer-lab'
     | '/documents'
     | '/feed'
     | '/images'
     | '/learn'
     | '/memory'
     | '/mind-graph'
+    | '/personal-tutor'
     | '/plan'
     | '/practice'
     | '/productivity'
     | '/progress'
+    | '/research'
     | '/search'
     | '/settings'
     | '/statistics'
@@ -1385,17 +1543,22 @@ export interface FileRouteTypes {
     | '/what-if'
     | '/api/anything-studio'
     | '/api/chat'
+    | '/api/community'
+    | '/api/developer-lab'
     | '/api/games'
     | '/api/health'
     | '/api/health-center'
     | '/api/images'
+    | '/api/knowledge-graph'
     | '/api/missions'
     | '/api/models'
     | '/api/openrouter-test'
+    | '/api/personal-tutor'
     | '/api/search'
     | '/api/shares'
     | '/api/title'
     | '/api/what-if'
+    | '/community/$slug'
     | '/share/$token'
     | '/admin/analytics'
     | '/canvas/$id'
@@ -1423,6 +1586,7 @@ export interface FileRouteTypes {
     | '/api/canvas/versions'
     | '/api/chat/ocr'
     | '/api/command-palette/search'
+    | '/api/developer-lab/history'
     | '/api/image/health'
     | '/api/images/$id'
     | '/api/images/models'
@@ -1456,6 +1620,7 @@ export interface FileRouteTypes {
     | '/api/shares/$token'
     | '/api/study-plans/$id'
     | '/api/voice/missions'
+    | '/community/creators/$name'
     | '/canvas'
     | '/command-center'
     | '/dashboards'
@@ -1466,7 +1631,10 @@ export interface FileRouteTypes {
     | '/api/dashboards'
     | '/api/knowledge'
     | '/api/projects'
+    | '/api/research'
     | '/api/study-plans'
+    | '/api/community/creators/$name'
+    | '/api/community/public/$slug'
     | '/api/learning/sources/ingest'
     | '/api/lord/agent/execute'
     | '/api/lord/agent/stop'
@@ -1490,6 +1658,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/privacy-policy'
     | '/reset-password'
     | '/sitemap.xml'
     | '/_authenticated/command-center'
@@ -1497,17 +1666,21 @@ export interface FileRouteTypes {
     | '/_authenticated/boards'
     | '/_authenticated/calendar'
     | '/_authenticated/chat'
+    | '/_authenticated/community'
     | '/_authenticated/create-apka-jalwa'
+    | '/_authenticated/developer-lab'
     | '/_authenticated/documents'
     | '/_authenticated/feed'
     | '/_authenticated/images'
     | '/_authenticated/learn'
     | '/_authenticated/memory'
     | '/_authenticated/mind-graph'
+    | '/_authenticated/personal-tutor'
     | '/_authenticated/plan'
     | '/_authenticated/practice'
     | '/_authenticated/productivity'
     | '/_authenticated/progress'
+    | '/_authenticated/research'
     | '/_authenticated/search'
     | '/_authenticated/settings'
     | '/_authenticated/statistics'
@@ -1518,17 +1691,22 @@ export interface FileRouteTypes {
     | '/_authenticated/what-if'
     | '/api/anything-studio'
     | '/api/chat'
+    | '/api/community'
+    | '/api/developer-lab'
     | '/api/games'
     | '/api/health'
     | '/api/health-center'
     | '/api/images'
+    | '/api/knowledge-graph'
     | '/api/missions'
     | '/api/models'
     | '/api/openrouter-test'
+    | '/api/personal-tutor'
     | '/api/search'
     | '/api/shares'
     | '/api/title'
     | '/api/what-if'
+    | '/community/$slug'
     | '/share/$token'
     | '/_authenticated/admin/analytics'
     | '/_authenticated/canvas/$id'
@@ -1556,6 +1734,7 @@ export interface FileRouteTypes {
     | '/api/canvas/versions'
     | '/api/chat/ocr'
     | '/api/command-palette/search'
+    | '/api/developer-lab/history'
     | '/api/image/health'
     | '/api/images/$id'
     | '/api/images/models'
@@ -1589,6 +1768,7 @@ export interface FileRouteTypes {
     | '/api/shares/$token'
     | '/api/study-plans/$id'
     | '/api/voice/missions'
+    | '/community/creators/$name'
     | '/_authenticated/canvas/'
     | '/_authenticated/command-center/'
     | '/_authenticated/dashboards/'
@@ -1599,7 +1779,10 @@ export interface FileRouteTypes {
     | '/api/dashboards/'
     | '/api/knowledge/'
     | '/api/projects/'
+    | '/api/research/'
     | '/api/study-plans/'
+    | '/api/community/creators/$name'
+    | '/api/community/public/$slug'
     | '/api/learning/sources/ingest'
     | '/api/lord/agent/execute'
     | '/api/lord/agent/stop'
@@ -1624,21 +1807,27 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiAnythingStudioRoute: typeof ApiAnythingStudioRoute
   ApiChatRoute: typeof ApiChatRouteWithChildren
+  ApiCommunityRoute: typeof ApiCommunityRouteWithChildren
+  ApiDeveloperLabRoute: typeof ApiDeveloperLabRouteWithChildren
   ApiGamesRoute: typeof ApiGamesRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiHealthCenterRoute: typeof ApiHealthCenterRoute
   ApiImagesRoute: typeof ApiImagesRouteWithChildren
+  ApiKnowledgeGraphRoute: typeof ApiKnowledgeGraphRoute
   ApiMissionsRoute: typeof ApiMissionsRoute
   ApiModelsRoute: typeof ApiModelsRoute
   ApiOpenrouterTestRoute: typeof ApiOpenrouterTestRoute
+  ApiPersonalTutorRoute: typeof ApiPersonalTutorRoute
   ApiSearchRoute: typeof ApiSearchRoute
   ApiSharesRoute: typeof ApiSharesRouteWithChildren
   ApiTitleRoute: typeof ApiTitleRoute
   ApiWhatIfRoute: typeof ApiWhatIfRoute
+  CommunitySlugRoute: typeof CommunitySlugRoute
   ShareTokenRoute: typeof ShareTokenRoute
   ApiAdminAnalyticsRoute: typeof ApiAdminAnalyticsRoute
   ApiAdminGatewayRoute: typeof ApiAdminGatewayRoute
@@ -1682,10 +1871,12 @@ export interface RootRouteChildren {
   ApiSharedTokenRoute: typeof ApiSharedTokenRoute
   ApiStudyPlansIdRoute: typeof ApiStudyPlansIdRouteWithChildren
   ApiVoiceMissionsRoute: typeof ApiVoiceMissionsRoute
+  CommunityCreatorsNameRoute: typeof CommunityCreatorsNameRoute
   ApiCanvasIndexRoute: typeof ApiCanvasIndexRoute
   ApiDashboardsIndexRoute: typeof ApiDashboardsIndexRoute
   ApiKnowledgeIndexRoute: typeof ApiKnowledgeIndexRoute
   ApiProjectsIndexRoute: typeof ApiProjectsIndexRoute
+  ApiResearchIndexRoute: typeof ApiResearchIndexRoute
   ApiStudyPlansIndexRoute: typeof ApiStudyPlansIndexRoute
   ApiLearningSourcesIngestRoute: typeof ApiLearningSourcesIngestRoute
   ApiLordAgentExecuteRoute: typeof ApiLordAgentExecuteRoute
@@ -1723,6 +1914,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -1774,11 +1972,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCommandCenterRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/community': {
+      id: '/_authenticated/community'
+      path: '/community'
+      fullPath: '/community'
+      preLoaderRoute: typeof AuthenticatedCommunityRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/create-apka-jalwa': {
       id: '/_authenticated/create-apka-jalwa'
       path: '/create-apka-jalwa'
       fullPath: '/create-apka-jalwa'
       preLoaderRoute: typeof AuthenticatedCreateApkaJalwaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/developer-lab': {
+      id: '/_authenticated/developer-lab'
+      path: '/developer-lab'
+      fullPath: '/developer-lab'
+      preLoaderRoute: typeof AuthenticatedDeveloperLabRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/documents': {
@@ -1823,6 +2035,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMindGraphRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/personal-tutor': {
+      id: '/_authenticated/personal-tutor'
+      path: '/personal-tutor'
+      fullPath: '/personal-tutor'
+      preLoaderRoute: typeof AuthenticatedPersonalTutorRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/plan': {
       id: '/_authenticated/plan'
       path: '/plan'
@@ -1849,6 +2068,13 @@ declare module '@tanstack/react-router' {
       path: '/progress'
       fullPath: '/progress'
       preLoaderRoute: typeof AuthenticatedProgressRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/research': {
+      id: '/_authenticated/research'
+      path: '/research'
+      fullPath: '/research'
+      preLoaderRoute: typeof AuthenticatedResearchRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/search': {
@@ -1921,6 +2147,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/community': {
+      id: '/api/community'
+      path: '/api/community'
+      fullPath: '/api/community'
+      preLoaderRoute: typeof ApiCommunityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/developer-lab': {
+      id: '/api/developer-lab'
+      path: '/api/developer-lab'
+      fullPath: '/api/developer-lab'
+      preLoaderRoute: typeof ApiDeveloperLabRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/games': {
       id: '/api/games'
       path: '/api/games'
@@ -1949,6 +2189,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/knowledge-graph': {
+      id: '/api/knowledge-graph'
+      path: '/api/knowledge-graph'
+      fullPath: '/api/knowledge-graph'
+      preLoaderRoute: typeof ApiKnowledgeGraphRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/missions': {
       id: '/api/missions'
       path: '/api/missions'
@@ -1968,6 +2215,13 @@ declare module '@tanstack/react-router' {
       path: '/api/openrouter-test'
       fullPath: '/api/openrouter-test'
       preLoaderRoute: typeof ApiOpenrouterTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/personal-tutor': {
+      id: '/api/personal-tutor'
+      path: '/api/personal-tutor'
+      fullPath: '/api/personal-tutor'
+      preLoaderRoute: typeof ApiPersonalTutorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/search': {
@@ -1996,6 +2250,13 @@ declare module '@tanstack/react-router' {
       path: '/api/what-if'
       fullPath: '/api/what-if'
       preLoaderRoute: typeof ApiWhatIfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community/$slug': {
+      id: '/community/$slug'
+      path: '/community/$slug'
+      fullPath: '/community/$slug'
+      preLoaderRoute: typeof CommunitySlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/share/$token': {
@@ -2243,6 +2504,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDashboardsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/developer-lab/history': {
+      id: '/api/developer-lab/history'
+      path: '/history'
+      fullPath: '/api/developer-lab/history'
+      preLoaderRoute: typeof ApiDeveloperLabHistoryRouteImport
+      parentRoute: typeof ApiDeveloperLabRoute
+    }
     '/api/image/health': {
       id: '/api/image/health'
       path: '/api/image/health'
@@ -2460,6 +2728,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/research/': {
+      id: '/api/research/'
+      path: '/api/research'
+      fullPath: '/api/research/'
+      preLoaderRoute: typeof ApiResearchIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/shared/$token': {
       id: '/api/shared/$token'
       path: '/api/shared/$token'
@@ -2494,6 +2769,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/voice/missions'
       preLoaderRoute: typeof ApiVoiceMissionsRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/community/creators/$name': {
+      id: '/community/creators/$name'
+      path: '/community/creators/$name'
+      fullPath: '/community/creators/$name'
+      preLoaderRoute: typeof CommunityCreatorsNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/community/creators/$name': {
+      id: '/api/community/creators/$name'
+      path: '/creators/$name'
+      fullPath: '/api/community/creators/$name'
+      preLoaderRoute: typeof ApiCommunityCreatorsNameRouteImport
+      parentRoute: typeof ApiCommunityRoute
+    }
+    '/api/community/public/$slug': {
+      id: '/api/community/public/$slug'
+      path: '/public/$slug'
+      fullPath: '/api/community/public/$slug'
+      preLoaderRoute: typeof ApiCommunityPublicSlugRouteImport
+      parentRoute: typeof ApiCommunityRoute
     }
     '/api/learning/sources/ingest': {
       id: '/api/learning/sources/ingest'
@@ -2669,17 +2965,21 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBoardsRoute: typeof AuthenticatedBoardsRoute
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
+  AuthenticatedCommunityRoute: typeof AuthenticatedCommunityRoute
   AuthenticatedCreateApkaJalwaRoute: typeof AuthenticatedCreateApkaJalwaRoute
+  AuthenticatedDeveloperLabRoute: typeof AuthenticatedDeveloperLabRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
   AuthenticatedFeedRoute: typeof AuthenticatedFeedRoute
   AuthenticatedImagesRoute: typeof AuthenticatedImagesRoute
   AuthenticatedLearnRoute: typeof AuthenticatedLearnRoute
   AuthenticatedMemoryRoute: typeof AuthenticatedMemoryRoute
   AuthenticatedMindGraphRoute: typeof AuthenticatedMindGraphRoute
+  AuthenticatedPersonalTutorRoute: typeof AuthenticatedPersonalTutorRoute
   AuthenticatedPlanRoute: typeof AuthenticatedPlanRoute
   AuthenticatedPracticeRoute: typeof AuthenticatedPracticeRoute
   AuthenticatedProductivityRoute: typeof AuthenticatedProductivityRoute
   AuthenticatedProgressRoute: typeof AuthenticatedProgressRoute
+  AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStatisticsRoute: typeof AuthenticatedStatisticsRoute
@@ -2705,17 +3005,21 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBoardsRoute: AuthenticatedBoardsRoute,
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
+  AuthenticatedCommunityRoute: AuthenticatedCommunityRoute,
   AuthenticatedCreateApkaJalwaRoute: AuthenticatedCreateApkaJalwaRoute,
+  AuthenticatedDeveloperLabRoute: AuthenticatedDeveloperLabRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
   AuthenticatedFeedRoute: AuthenticatedFeedRoute,
   AuthenticatedImagesRoute: AuthenticatedImagesRoute,
   AuthenticatedLearnRoute: AuthenticatedLearnRoute,
   AuthenticatedMemoryRoute: AuthenticatedMemoryRoute,
   AuthenticatedMindGraphRoute: AuthenticatedMindGraphRoute,
+  AuthenticatedPersonalTutorRoute: AuthenticatedPersonalTutorRoute,
   AuthenticatedPlanRoute: AuthenticatedPlanRoute,
   AuthenticatedPracticeRoute: AuthenticatedPracticeRoute,
   AuthenticatedProductivityRoute: AuthenticatedProductivityRoute,
   AuthenticatedProgressRoute: AuthenticatedProgressRoute,
+  AuthenticatedResearchRoute: AuthenticatedResearchRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStatisticsRoute: AuthenticatedStatisticsRoute,
@@ -2747,6 +3051,32 @@ const ApiChatRouteChildren: ApiChatRouteChildren = {
 
 const ApiChatRouteWithChildren =
   ApiChatRoute._addFileChildren(ApiChatRouteChildren)
+
+interface ApiCommunityRouteChildren {
+  ApiCommunityCreatorsNameRoute: typeof ApiCommunityCreatorsNameRoute
+  ApiCommunityPublicSlugRoute: typeof ApiCommunityPublicSlugRoute
+}
+
+const ApiCommunityRouteChildren: ApiCommunityRouteChildren = {
+  ApiCommunityCreatorsNameRoute: ApiCommunityCreatorsNameRoute,
+  ApiCommunityPublicSlugRoute: ApiCommunityPublicSlugRoute,
+}
+
+const ApiCommunityRouteWithChildren = ApiCommunityRoute._addFileChildren(
+  ApiCommunityRouteChildren,
+)
+
+interface ApiDeveloperLabRouteChildren {
+  ApiDeveloperLabHistoryRoute: typeof ApiDeveloperLabHistoryRoute
+}
+
+const ApiDeveloperLabRouteChildren: ApiDeveloperLabRouteChildren = {
+  ApiDeveloperLabHistoryRoute: ApiDeveloperLabHistoryRoute,
+}
+
+const ApiDeveloperLabRouteWithChildren = ApiDeveloperLabRoute._addFileChildren(
+  ApiDeveloperLabRouteChildren,
+)
 
 interface ApiImagesRouteChildren {
   ApiImagesIdRoute: typeof ApiImagesIdRoute
@@ -2800,21 +3130,27 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiAnythingStudioRoute: ApiAnythingStudioRoute,
   ApiChatRoute: ApiChatRouteWithChildren,
+  ApiCommunityRoute: ApiCommunityRouteWithChildren,
+  ApiDeveloperLabRoute: ApiDeveloperLabRouteWithChildren,
   ApiGamesRoute: ApiGamesRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiHealthCenterRoute: ApiHealthCenterRoute,
   ApiImagesRoute: ApiImagesRouteWithChildren,
+  ApiKnowledgeGraphRoute: ApiKnowledgeGraphRoute,
   ApiMissionsRoute: ApiMissionsRoute,
   ApiModelsRoute: ApiModelsRoute,
   ApiOpenrouterTestRoute: ApiOpenrouterTestRoute,
+  ApiPersonalTutorRoute: ApiPersonalTutorRoute,
   ApiSearchRoute: ApiSearchRoute,
   ApiSharesRoute: ApiSharesRouteWithChildren,
   ApiTitleRoute: ApiTitleRoute,
   ApiWhatIfRoute: ApiWhatIfRoute,
+  CommunitySlugRoute: CommunitySlugRoute,
   ShareTokenRoute: ShareTokenRoute,
   ApiAdminAnalyticsRoute: ApiAdminAnalyticsRoute,
   ApiAdminGatewayRoute: ApiAdminGatewayRoute,
@@ -2858,10 +3194,12 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSharedTokenRoute: ApiSharedTokenRoute,
   ApiStudyPlansIdRoute: ApiStudyPlansIdRouteWithChildren,
   ApiVoiceMissionsRoute: ApiVoiceMissionsRoute,
+  CommunityCreatorsNameRoute: CommunityCreatorsNameRoute,
   ApiCanvasIndexRoute: ApiCanvasIndexRoute,
   ApiDashboardsIndexRoute: ApiDashboardsIndexRoute,
   ApiKnowledgeIndexRoute: ApiKnowledgeIndexRoute,
   ApiProjectsIndexRoute: ApiProjectsIndexRoute,
+  ApiResearchIndexRoute: ApiResearchIndexRoute,
   ApiStudyPlansIndexRoute: ApiStudyPlansIndexRoute,
   ApiLearningSourcesIngestRoute: ApiLearningSourcesIngestRoute,
   ApiLordAgentExecuteRoute: ApiLordAgentExecuteRoute,

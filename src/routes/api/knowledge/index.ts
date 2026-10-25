@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { apiOkResponse, apiErrorResponse, getSafeErrorMessage } from "@/lib/api-error";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
-import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/api/knowledge/")({
   server: {
@@ -10,7 +11,10 @@ export const Route = createFileRoute("/api/knowledge/")({
     handlers: {
       GET: async ({ context, request }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const url = new URL(request.url);
           const projectId = url.searchParams.get("projectId") ?? undefined;
           let query = supabase

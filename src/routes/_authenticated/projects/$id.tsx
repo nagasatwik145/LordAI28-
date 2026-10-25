@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowLeft,
   MessageSquare,
@@ -11,6 +11,10 @@ import {
   FolderOpen,
   Plus,
   MoreHorizontal,
+  FileText,
+  Search,
+  Upload,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/lord/AppShell";
@@ -41,11 +45,13 @@ import {
 import { useMemories } from "@/lib/memory";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
+import { validateProjectFile } from "@/lib/brain/project-validation";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: FolderOpen },
   { id: "chats", label: "Chats", icon: MessageSquare },
-  { id: "knowledge", label: "Knowledge", icon: BookOpen },
+  { id: "documents", label: "Documents", icon: FileText },
+  { id: "files", label: "Files", icon: BookOpen },
   { id: "notes", label: "Notes", icon: StickyNote },
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "memories", label: "Memories", icon: Brain },
@@ -67,18 +73,198 @@ function ProjectWorkspace() {
   const [newNoteTitle, setNewNoteTitle] = useState("");
   const [newNoteContent, setNewNoteContent] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [resourceSearch, setResourceSearch] = useState("");
+  const [saveState, setSaveState] = useState<Record<string, string>>({});
 
   const { data: project, isLoading: projectLoading } = useProject(user?.id ?? null, id);
   const { data: notes } = useProjectNotes(user?.id ?? null, id);
   const { data: tasks } = useProjectTasks(user?.id ?? null, id);
   const { data: memories } = useMemories(user?.id ?? null);
   const { data: activity } = useProjectActivity(user?.id ?? null, id);
+  const { data: conversations } = useQuery({
+    queryKey: ["project-conversations", user?.id, id],
+    enabled: !!user?.id && !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("id,title,updated_at,last_message_at")
+        .eq("user_id", user!.id)
+        .eq("project_id", id)
+        .is("deleted_at", null)
+        .order("last_message_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: unlinkedConversations, refetch: refetchUnlinked } = useQuery({
+    queryKey: ["unlinked-conversations", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("id,title,last_message_at")
+        .eq("user_id", user!.id)
+        .is("project_id", null)
+        .is("deleted_at", null)
+        .order("last_message_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: sources, refetch: refetchSources } = useQuery({
+    queryKey: ["project-sources", user?.id, id],
+    enabled: !!user?.id && !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("knowledge_sources")
+        .select(
+          "id,name,mime_type,file_size_bytes,storage_path,processing_status,created_at,source_type",
+        )
+        .eq("user_id", user!.id)
+        .eq("project_id", id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const createNote = useCreateNote(user?.id ?? null, id);
   const updateNote = useUpdateNote(user?.id ?? null, id);
   const deleteNote = useDeleteNote(user?.id ?? null, id);
   const createTask = useCreateTask(user?.id ?? null, id);
   const updateTask = useUpdateTask(user?.id ?? null, id);
   const deleteTask = useDeleteTask(user?.id ?? null, id);
+
+  const visibleNotes = useMemo(
+    () =>
+      (notes ?? []).filter((note) =>
+        `${note.title} ${note.content}`.toLowerCase().includes(resourceSearch.toLowerCase()),
+      ),
+    [notes, resourceSearch],
+  );
+  const visibleTasks = useMemo(
+    () =>
+      (tasks ?? []).filter((task) =>
+        `${task.title} ${task.description ?? ""}`
+          .toLowerCase()
+          .includes(resourceSearch.toLowerCase()),
+      ),
+    [tasks, resourceSearch],
+  );
+  const visibleSources = useMemo(
+    () =>
+      (sources ?? []).filter((source) =>
+        source.name.toLowerCase().includes(resourceSearch.toLowerCase()),
+      ),
+    [sources, resourceSearch],
+  );
+
+  const saveNoteField = (
+    note: NonNullable<typeof notes>[number],
+    patch: { title?: string; content?: string },
+  ) => {
+    setSaveState((current) => ({ ...current, [note.id]: "Saving…" }));
+    const timers = window as typeof window & { __projectNoteTimers?: Record<string, number> };
+    timers.__projectNoteTimers ??= {};
+    window.clearTimeout(timers.__projectNoteTimers[note.id]);
+    timers.__projectNoteTimers[note.id] = window.setTimeout(() => {
+      void updateNote
+        .mutateAsync({ id: note.id, expectedUpdatedAt: note.updatedAt, patch })
+        .then(() => setSaveState((s) => ({ ...s, [note.id]: "Saved" })))
+        .catch((error) =>
+          setSaveState((s) => ({
+            ...s,
+            [note.id]:
+              error instanceof Error && error.message.includes("changed elsewhere")
+                ? "Changed in another session. Reload this project to keep editing."
+                : "Save failed. Edit again to retry.",
+          })),
+        );
+    }, 650);
+  };
+
+  const uploadProjectFile = async (file?: File) => {
+    if (!file || !user?.id) return;
+    const validationError = validateProjectFile(file);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    const path = `${user.id}/${id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from("project-files")
+        .upload(path, file, { contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { error } = await supabase.from("knowledge_sources").insert({
+        user_id: user.id,
+        project_id: id,
+        name: file.name,
+        source_type: "file",
+        storage_path: path,
+        mime_type: file.type,
+        file_size_bytes: file.size,
+        processing_status: "stored",
+      });
+      if (error) {
+        await supabase.storage.from("project-files").remove([path]);
+        throw error;
+      }
+      await refetchSources();
+      toast.success("File added to project");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not upload file");
+    }
+  };
+
+  const downloadSource = async (path: string) => {
+    const { data, error } = await supabase.storage.from("project-files").createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      toast.error("Could not open this file");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const exportProject = () => {
+    if (!project) return;
+    const payload = {
+      project,
+      notes: notes ?? [],
+      tasks: tasks ?? [],
+      conversations: conversations ?? [],
+      files: sources ?? [],
+      activity: activity ?? [],
+    };
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${project.name.replace(/[^a-z0-9-_]/gi, "-")}-workspace.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const linkConversation = async (conversationId: string) => {
+    if (!user?.id) return;
+    const { error } = await supabase
+      .from("conversations")
+      .update({ project_id: id })
+      .eq("id", conversationId)
+      .eq("user_id", user.id)
+      .is("project_id", null);
+    if (error) {
+      toast.error("Could not link conversation");
+      return;
+    }
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["project-conversations", user.id, id] }),
+      refetchUnlinked(),
+    ]);
+    toast.success("Conversation linked to project");
+  };
 
   const handleCreateNote = async () => {
     if (!newNoteTitle.trim() || !user?.id) return;
@@ -95,8 +281,12 @@ function ProjectWorkspace() {
   const handleCreateTask = async () => {
     if (!newTaskTitle.trim() || !user?.id) return;
     try {
-      await createTask.mutateAsync({ title: newTaskTitle.trim() });
+      await createTask.mutateAsync({
+        title: newTaskTitle.trim(),
+        dueDate: newTaskDueDate ? new Date(`${newTaskDueDate}T23:59:59`).toISOString() : undefined,
+      });
       setNewTaskTitle("");
+      setNewTaskDueDate("");
       toast.success("Task created");
     } catch {
       toast.error("Failed to create task");
@@ -145,7 +335,7 @@ function ProjectWorkspace() {
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 flex items-center gap-4">
+        <div className="mb-6 flex flex-wrap items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/projects" })}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Projects
           </Button>
@@ -163,10 +353,24 @@ function ProjectWorkspace() {
               </p>
             </div>
           </div>
+          <Button className="ml-auto" variant="outline" size="sm" onClick={exportProject}>
+            Export project
+          </Button>
+        </div>
+
+        <div className="relative mb-4 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="Search project resources"
+            className="pl-9"
+            placeholder="Search notes, tasks, and files"
+            value={resourceSearch}
+            onChange={(event) => setResourceSearch(event.target.value)}
+          />
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:grid-cols-4 lg:grid-cols-7">
             {TABS.map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
                 <tab.icon className="h-4 w-4" />
@@ -179,6 +383,8 @@ function ProjectWorkspace() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <StatCard title="Notes" value={notes?.length ?? 0} icon={StickyNote} />
               <StatCard title="Tasks" value={tasks?.length ?? 0} icon={ListTodo} />
+              <StatCard title="Files" value={sources?.length ?? 0} icon={FileText} />
+              <StatCard title="Chats" value={conversations?.length ?? 0} icon={MessageSquare} />
               <StatCard title="Memories" value={projectMemories.length} icon={Brain} />
             </div>
             {activity && activity.length > 0 && (
@@ -202,26 +408,145 @@ function ProjectWorkspace() {
             <Card className="p-5">
               <h3 className="mb-4 font-semibold text-white">Project Chats</h3>
               <p className="text-sm text-muted-foreground">
-                Chats linked to this project will appear here. Start a new chat and select this
-                project to get started.
+                Chats opened here use relevant project notes and indexed knowledge as LORD context.
               </p>
               <Button asChild className="mt-4 gap-2">
                 <Link to="/chat" search={{ projectId: id }}>
                   <Plus className="h-4 w-4" /> New Chat
                 </Link>
               </Button>
+              <div className="mt-5 space-y-2">
+                {conversations?.map((chat) => (
+                  <Link
+                    key={chat.id}
+                    to="/chat"
+                    search={{ conversationId: chat.id, projectId: id }}
+                    className="flex items-center justify-between rounded-lg border border-border/50 p-3 hover:border-primary/50"
+                  >
+                    <span className="truncate text-sm text-white">
+                      {chat.title || "Untitled conversation"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {chat.last_message_at
+                        ? new Date(chat.last_message_at).toLocaleDateString()
+                        : ""}
+                    </span>
+                  </Link>
+                ))}
+                {conversations?.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No conversations linked to this project yet.
+                  </p>
+                )}
+              </div>
+              {!!unlinkedConversations?.length && (
+                <details className="mt-5">
+                  <summary className="cursor-pointer text-sm text-primary">
+                    Link an existing conversation
+                  </summary>
+                  <div className="mt-2 max-h-56 space-y-2 overflow-auto">
+                    {unlinkedConversations.map((chat) => (
+                      <div
+                        key={chat.id}
+                        className="flex items-center justify-between gap-3 rounded border border-border/50 p-2"
+                      >
+                        <span className="truncate text-sm">
+                          {chat.title || "Untitled conversation"}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void linkConversation(chat.id)}
+                        >
+                          Link
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
             </Card>
           </TabsContent>
 
-          <TabsContent value="knowledge" className="space-y-4">
+          <TabsContent value="documents" className="space-y-4">
             <Card className="p-5">
-              <h3 className="mb-4 font-semibold text-white">Knowledge Base</h3>
-              <p className="text-sm text-muted-foreground">
-                Upload documents, URLs, and other sources to build your project's knowledge base.
-              </p>
-              <Button className="mt-4 gap-2">
-                <Plus className="h-4 w-4" /> Upload Knowledge
-              </Button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-white">Project documents</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Private files use owner-scoped storage. Indexed text can be used for project
+                    answers.
+                  </p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+                  <Upload className="h-4 w-4" />
+                  Upload file
+                  <input
+                    className="sr-only"
+                    type="file"
+                    accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp"
+                    onChange={(event) => {
+                      void uploadProjectFile(event.target.files?.[0]);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="mt-5 space-y-2">
+                {visibleSources.map((source) => (
+                  <div
+                    key={source.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/50 p-3"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <FileText className="h-4 w-4 shrink-0 text-primary" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-white">{source.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(source.file_size_bytes / 1024 / 1024).toFixed(2)} MB ·{" "}
+                          {source.processing_status}
+                        </p>
+                      </div>
+                    </div>
+                    {source.storage_path && (
+                      <Button
+                        aria-label={`Download ${source.name}`}
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => void downloadSource(source.storage_path!)}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {sources?.length === 0 && (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    No documents in this project yet.
+                  </p>
+                )}
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="files">
+            <Card className="p-5">
+              <h3 className="font-semibold text-white">Project files</h3>
+              <div className="mt-4 space-y-2">
+                {visibleSources.map((source) => (
+                  <button
+                    key={source.id}
+                    onClick={() => source.storage_path && void downloadSource(source.storage_path)}
+                    className="flex w-full items-center gap-3 rounded-lg border border-border/50 p-3 text-left hover:border-primary/50"
+                  >
+                    <FileText className="h-4 w-4 text-primary" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-white">
+                      {source.name}
+                    </span>
+                    <Download className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
             </Card>
           </TabsContent>
 
@@ -246,13 +571,22 @@ function ProjectWorkspace() {
                 </Button>
               </div>
               <div className="space-y-3">
-                {notes?.map((note) => (
+                {visibleNotes.map((note) => (
                   <Card key={note.id} className="p-4">
                     <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-medium text-white">{note.title}</h4>
-                        <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                          {note.content}
+                      <div className="min-w-0 flex-1 space-y-2 pr-3">
+                        <Input
+                          aria-label="Note title"
+                          defaultValue={note.title}
+                          onChange={(event) => saveNoteField(note, { title: event.target.value })}
+                        />
+                        <Textarea
+                          aria-label="Note content"
+                          defaultValue={note.content}
+                          onChange={(event) => saveNoteField(note, { content: event.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground" aria-live="polite">
+                          {saveState[note.id] ?? "Saved"}
                         </p>
                       </div>
                       <DropdownMenu>
@@ -297,19 +631,20 @@ function ProjectWorkspace() {
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-semibold text-white">Tasks</h3>
               </div>
-              <div className="mb-4 flex gap-2">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row">
                 <Input
                   placeholder="Task title"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCreateTask()}
                 />
+                <Input aria-label="Task due date" type="date" className="sm:max-w-44" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} />
                 <Button onClick={handleCreateTask} disabled={!newTaskTitle.trim()}>
                   Add
                 </Button>
               </div>
               <div className="space-y-2">
-                {tasks?.map((task) => (
+                {visibleTasks.map((task) => (
                   <Card
                     key={task.id}
                     className={cn(
@@ -349,6 +684,7 @@ function ProjectWorkspace() {
                       >
                         {task.priority}
                       </span>
+                      {task.dueDate && <span className="text-xs text-muted-foreground">Due {new Date(task.dueDate).toLocaleDateString()}</span>}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

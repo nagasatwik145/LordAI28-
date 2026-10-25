@@ -7,7 +7,8 @@ import {
   getSafeErrorMessage,
 } from "@/lib/api-error";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
-import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const UpdateProjectSchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -24,7 +25,10 @@ export const Route = createFileRoute("/api/projects/$id")({
     handlers: {
       GET: async ({ context, params }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const { data, error } = await supabase
             .from("projects")
             .select("*")
@@ -43,7 +47,10 @@ export const Route = createFileRoute("/api/projects/$id")({
       },
       PATCH: async ({ request, context, params }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const body = await request.json();
           const parsed = UpdateProjectSchema.safeParse(body);
           if (!parsed.success) {
@@ -68,7 +75,10 @@ export const Route = createFileRoute("/api/projects/$id")({
       },
       DELETE: async ({ context, params }) => {
         try {
-          const { userId } = context as { userId: string };
+          const { userId, supabase } = context as {
+            userId: string;
+            supabase: SupabaseClient<Database>;
+          };
           const { error } = await supabase
             .from("projects")
             .delete()

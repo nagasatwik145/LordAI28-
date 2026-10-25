@@ -32,6 +32,7 @@ export interface LordError {
   message: string;
   recoverable: boolean;
   requestId: string;
+  retryAfterMs?: number;
 }
 
 export interface LordErrorInput {
@@ -41,6 +42,7 @@ export interface LordErrorInput {
   message: string;
   recoverable: boolean;
   requestId: string;
+  retryAfterMs?: number;
 }
 
 export function createLordError(input: LordErrorInput): LordError {
@@ -52,6 +54,7 @@ export function createLordError(input: LordErrorInput): LordError {
     message: input.message,
     recoverable: input.recoverable,
     requestId: input.requestId,
+    ...(input.retryAfterMs !== undefined ? { retryAfterMs: input.retryAfterMs } : {}),
   };
 }
 
@@ -96,8 +99,21 @@ export function parseLordError(input: unknown): LordError | null {
   const provider = typeof e.provider === "string" ? e.provider : "unknown";
   const model = typeof e.model === "string" ? e.model : "unknown";
   const recoverable = typeof e.recoverable === "boolean" ? e.recoverable : true;
+  const retryAfterMs =
+    typeof e.retryAfterMs === "number" && Number.isFinite(e.retryAfterMs) && e.retryAfterMs >= 0
+      ? Math.min(e.retryAfterMs, 10 * 60 * 1000)
+      : undefined;
 
-  return { success: false, code, provider, model, message, recoverable, requestId };
+  return {
+    success: false,
+    code,
+    provider,
+    model,
+    message,
+    recoverable,
+    requestId,
+    ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+  };
 }
 
 function providerLabel(provider: string): string {
@@ -134,7 +150,11 @@ export function formatUserFacingError(err: LordError): string {
     case "AI_PROVIDER_UNAVAILABLE":
       return `Provider unavailable. Switching to fallback model…${tag}`;
     case "AI_RATE_LIMITED":
-      return `The AI provider is rate limiting requests. Please retry shortly.${tag}`;
+      return `The AI provider is rate limiting requests.${
+        err.retryAfterMs !== undefined
+          ? ` Retry in ${Math.max(1, Math.ceil(err.retryAfterMs / 1000))} seconds.`
+          : " Please retry shortly."
+      }${tag}`;
     case "AI_CREDITS_EXHAUSTED":
       return `AI credits are exhausted. Add workspace credits and try again.${tag}`;
     case "AI_AUTH_ERROR":

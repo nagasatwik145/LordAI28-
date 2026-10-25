@@ -19,7 +19,9 @@ export type ApiErrorCode =
   | "WHAT_IF_ERROR"
   | "INTERNAL_ERROR"
   | "NOT_FOUND"
-  | "PRO_REQUIRED";
+  | "PRO_REQUIRED"
+  | "REQUEST_CANCELLED"
+  | "RESEARCH_FAILED";
 
 export interface ProviderStatus {
   provider: string;

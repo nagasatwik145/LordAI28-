@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 const entries = [
   "/",
+  "/privacy-policy",
   "/chat",
   "/study",
   "/productivity",

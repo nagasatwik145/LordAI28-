@@ -10,7 +10,6 @@ import { ParticleField } from "./ParticleField";
 import { WakeIndicator } from "./WakeIndicator";
 import { HealthHud } from "./HealthHud";
 import { NavigationDock } from "./NavigationDock";
-import { DailyBriefing } from "./DailyBriefing";
 import { PRIMARY_NAVIGATION, SECONDARY_NAVIGATION } from "./app-navigation";
 import { AppCommandPalette } from "@/features/command-palette/app-command-palette";
 
@@ -247,7 +246,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       </nav>
 
       <WakeIndicator />
-      <DailyBriefing />
     </div>
   );
 }
