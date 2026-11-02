@@ -63,6 +63,9 @@ import {
 import { IMAGE_MODEL_REGISTRY, DEFAULT_IMAGE_MODEL_ID } from "@/lib/ai/image";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { useWakeWord } from "@/components/lord/WakeWordProvider";
+import { getVoiceMicrophonePermission } from "@/lib/voice/microphone";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "LORD — Settings" }] }),
@@ -214,6 +217,17 @@ function SettingsToggle({
   );
 }
 
+function describeWakeWordStatus(wake: ReturnType<typeof useWakeWord>): string {
+  if (!wake.wakeWordAvailable) return "Unavailable: local wake-word model not installed";
+  if (wake.state === "wake_listening") return "Listening while app is open";
+  if (wake.state === "paused") return "Paused";
+  if (wake.state === "error") return "Error";
+  if (wake.state === "disabled") {
+    return wake.supported ? "Off" : "Speech recognition unavailable";
+  }
+  return wake.state.replaceAll("_", " ");
+}
+
 function SettingsPage() {
   const fetchSettings = useServerFn(getUserSettings);
   const saveSettings = useServerFn(updateUserSettings);
@@ -241,6 +255,27 @@ function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [theme, setTheme] = useState("dark");
   const [imgDefaults, setImgDefaults] = useState(getImageGenDefaults());
+  const wake = useWakeWord();
+  const [microphonePermission, setMicrophonePermission] = useState("unknown");
+  const [wakeTestMessage, setWakeTestMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void getVoiceMicrophonePermission().then((permission) => {
+      if (active) setMicrophonePermission(permission);
+    });
+    return () => {
+      active = false;
+    };
+  }, [wake.state]);
+
+  useEffect(() => {
+    if (wake.state === "activated") {
+      setWakeTestMessage("Wake phrase detected. Continue speaking your request.");
+    } else if (wake.state === "error") {
+      setWakeTestMessage(wake.errorMessage);
+    }
+  }, [wake.errorMessage, wake.state]);
 
   useEffect(() => {
     if (!data || typeof data === "string") return;
@@ -486,6 +521,95 @@ function SettingsPage() {
                   >
                     Manage Account
                   </button>
+                </div>
+              </div>
+            </motion.section>
+
+            <motion.section variants={itemVariants}>
+              <div className="hud-panel relative overflow-hidden rounded-xl p-5 sm:p-6">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-300/[0.07] via-transparent to-transparent" />
+                <div className="relative flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-display text-lg font-semibold text-foreground">
+                      Hey Lord Voice Activation
+                    </h2>
+                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                      A custom local “Hey Lord” detector is not bundled yet. The browser speech
+                      recognizer is no longer used for wake detection. Tap to Talk remains available
+                      on the Voice Assistant screen; wake listening requires a license-cleared model
+                      and native Android integration.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={wake.wakeWordAvailable && wake.enabled}
+                    onCheckedChange={(checked) => {
+                      setWakeTestMessage("");
+                      if (checked) void wake.enable();
+                      else wake.stop();
+                    }}
+                    disabled={!wake.wakeWordAvailable}
+                    aria-label="Enable Hey Lord Voice Activation"
+                  />
+                </div>
+
+                <div className="relative mt-4 rounded-xl border border-border/50 bg-background/30 p-3 text-xs">
+                  <p>
+                    <span className="font-semibold text-foreground">Microphone (Tap to Talk):</span>{" "}
+                    <span className="capitalize text-muted-foreground">
+                      {wake.state === "requesting_permission"
+                        ? "requesting permission"
+                        : microphonePermission}
+                    </span>
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-semibold text-foreground">Status:</span>{" "}
+                    <span className="text-muted-foreground">{describeWakeWordStatus(wake)}</span>
+                  </p>
+                  <p className="mt-2 leading-relaxed text-muted-foreground">
+                    No microphone is held open for wake detection. Android background listening is
+                    not implemented. A future service would need an explicitly started microphone
+                    foreground service with a persistent notification, and still use a notification
+                    tap if Android blocks opening the activity.
+                  </p>
+                </div>
+
+                {(wakeTestMessage || wake.errorMessage) && (
+                  <p
+                    className="relative mt-3 text-sm text-cyan-100"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {wakeTestMessage || wake.errorMessage}
+                  </p>
+                )}
+
+                <div className="relative mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setWakeTestMessage("The local “Hey Lord” model is not installed.")
+                    }
+                    disabled={!wake.wakeWordAvailable || wake.state === "requesting_permission"}
+                    title={
+                      wake.wakeWordAvailable
+                        ? "Test the local wake-word model"
+                        : "Requires the missing local wake-word model"
+                    }
+                    className="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {wake.wakeWordAvailable
+                      ? "Test “Hey Lord”"
+                      : "Test unavailable (model missing)"}
+                  </button>
+                  {wake.enabled && (
+                    <button
+                      type="button"
+                      onClick={wake.stop}
+                      className="inline-flex min-h-11 items-center justify-center rounded-full border border-border/70 px-4 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      Stop listening
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.section>

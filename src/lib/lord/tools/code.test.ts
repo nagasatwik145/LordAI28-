@@ -91,7 +91,7 @@ describe("code.validate", () => {
   it("runs only an existing allowlisted script inside the approved project root", async () => {
     fs.writeFileSync(
       path.join(allowedDir, "package.json"),
-      JSON.stringify({ scripts: { test: 'node -e "process.stdout.write(\\"validation-ok\\")"' } }),
+      JSON.stringify({ scripts: { test: "echo validation-ok" } }),
     );
     const tool = getTool("code.validate")!;
 

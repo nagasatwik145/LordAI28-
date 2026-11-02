@@ -42,7 +42,10 @@ export function findWakePhrase(transcript: string): { phrase: string; command: s
   };
 }
 
-/** Exact browser speech recognition for “Hey, LORD”; it never substitutes another wake model. */
+/**
+ * Legacy transcript matcher kept for tests and SpeechRecognition compatibility.
+ * This is not an acoustic wake-word detector and must not be used for activation.
+ */
 export class WebSpeechWakeEngine implements WakeEngine {
   readonly name = "webspeech";
   onInterim: (transcript: string) => void = () => {};

@@ -76,6 +76,7 @@ function VoicePage() {
   const {
     enabled,
     supported,
+    wakeWordAvailable,
     state,
     errorMessage,
     transcript,
@@ -367,8 +368,9 @@ function VoicePage() {
           </p>
           {state === "disabled" && (
             <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
-              Enable voice or tap to talk. LORD listens only while this page is open and in the
-              foreground; background wake-word listening is not supported.
+              Hey Lord detection is unavailable until a local acoustic model is added. Tap to Talk
+              remains available on demand; LORD does not use continuous speech recognition as a
+              wake-word substitute.
             </p>
           )}
           {!supported && (
@@ -382,11 +384,11 @@ function VoicePage() {
             <button
               type="button"
               onClick={() => (enabled ? toggle() : void enable())}
-              disabled={!supported}
+              disabled={!supported || !wakeWordAvailable}
               aria-label={
                 enabled
                   ? "Stop voice assistant and mute microphone"
-                  : "Enable voice assistant microphone"
+                  : "Hey Lord wake-word model is not installed"
               }
               aria-pressed={enabled}
               className={cn(
@@ -397,7 +399,7 @@ function VoicePage() {
               )}
             >
               {enabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              {enabled ? "Mute microphone" : "Enable voice"}
+              {enabled ? "Mute microphone" : "Wake word unavailable"}
             </button>
             <button
               type="button"
@@ -622,7 +624,7 @@ function VoicePage() {
           >
             <p>{errorMessage}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {(state === "error" || state === "paused") && supported && (
+              {(state === "error" || state === "paused") && supported && wakeWordAvailable && (
                 <button
                   type="button"
                   onClick={() => void enable()}

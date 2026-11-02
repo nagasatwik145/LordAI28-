@@ -1,9 +1,10 @@
 /**
  * Wake-engine interface.
  *
- * Engines run independently of speech-to-text. When the wake word fires,
- * `onWake` is invoked; the caller then opens a short STT window to capture
- * the user's command.
+ * Wake engines should detect a short phrase independently of command speech
+ * recognition. The current WebSpeech implementation is a foreground-only
+ * compatibility engine that matches browser-recognized speech; it is not a
+ * local acoustic wake-word model.
  */
 export interface WakeEngine {
   readonly name: string;

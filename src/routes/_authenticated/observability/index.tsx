@@ -12,10 +12,20 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { HealthCenterSnapshot, HealthCheck, HealthStatus } from "@/lib/health-center.types";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
+import { AppShell } from "@/components/lord/AppShell";
 
 export const Route = createFileRoute("/_authenticated/observability/")({
-  component: ObservabilityPage,
+  component: ObservabilityLayout,
 });
+
+function ObservabilityLayout() {
+  return (
+    <AppShell>
+      <ObservabilityPage />
+    </AppShell>
+  );
+}
 
 function ObservabilityPage() {
   const [health, setHealth] = useState<HealthCenterSnapshot>();
@@ -30,11 +40,14 @@ function ObservabilityPage() {
     setLoading(true);
     setError(undefined);
     try {
-      const response = await fetch(`/api/health-center${activeChecks ? "?active=1" : ""}`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-        signal: controller.signal,
-      });
+      const response = await authenticatedFetch(
+        `/api/health-center${activeChecks ? "?active=1" : ""}`,
+        {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+          signal: controller.signal,
+        },
+      );
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error("Your session has expired. Sign in again to view diagnostics.");

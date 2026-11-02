@@ -1,3 +1,15 @@
+export type VoiceMicrophonePermission = "granted" | "denied" | "prompt" | "unknown";
+
+export async function getVoiceMicrophonePermission(): Promise<VoiceMicrophonePermission> {
+  if (typeof navigator === "undefined" || !navigator.permissions?.query) return "unknown";
+  try {
+    const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
+    return status.state;
+  } catch {
+    return "unknown";
+  }
+}
+
 export async function requestVoiceMicrophonePermission(): Promise<void> {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
     throw new Error("Microphone access is unavailable in this browser.");

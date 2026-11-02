@@ -20,7 +20,6 @@ export async function initializeMobileRuntime() {
     StatusBar.setBackgroundColor({ color: "#0a0e1a" }),
     StatusBar.setOverlaysWebView({ overlay: true }),
     Keyboard.setAccessoryBarVisible({ isVisible: false }),
-    SplashScreen.hide(),
   ]);
 }
 

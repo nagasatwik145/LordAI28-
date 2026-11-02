@@ -1,23 +1,25 @@
-# LORD AI voice and “Hey, LORD”
+# LORD AI “Hey Lord” wake-word status
 
-LORD's voice input uses the browser or Android WebView `SpeechRecognition` / `webkitSpeechRecognition` API through the shared voice pipeline. The same recognition service handles the “Hey, LORD” phrase and tap-to-talk transcription. There is no bundled acoustic wake model, no OpenWakeWord ONNX pipeline, and no native Android wake-word plugin in this project.
+## Current implementation
 
-## What the wake phrase supports
+There is no native wake-word plugin, Android microphone foreground service, or acoustic model in this repository. The former `WebSpeechWakeEngine` matched “Hey Lord” in general-purpose browser/Android WebView speech-recognition transcripts; it did not acoustically detect the phrase locally. That continuous-recognition path has been disconnected from the app's wake activation. The settings screen now reports that the model is unavailable, and does not request microphone access for wake listening.
 
-The wake engine requests microphone access only after the user enables voice. It opens a continuous browser recognition session while the authenticated `/voice` page is active. The browser may end that session at any time; LORD restarts it with a bounded retry policy and stops after repeated interruptions. Users can retry or use tap-to-talk and typed chat. A wake phrase followed by command words in the same finalized transcript is submitted once; otherwise LORD opens a separate tap-to-talk recognition session. Recognition is stopped before spoken replies and is not restarted until playback has ended, preventing LORD's own speech from being treated as a command.
+Tap to Talk remains a separate, user-initiated command-recognition path through the existing LORD voice pipeline. Its browser/Android speech provider may have its own network and privacy behavior; it is not being used for wake detection. The in-app floating assistant remains dormant until a detector can activate it. It is not an Android overlay.
 
-This is best-effort foreground phrase recognition. It is not an always-on wake-word engine and does not promise uninterrupted listening. Browser and Android WebView behavior varies by OS version, speech-service provider, network, and device. The app stops voice when its route is left or the app/tab is backgrounded.
+## openWakeWord Android port and model licensing
 
-## Android permissions and lifecycle
+The evaluated `msnilsen/openwakeword-android` port runs openWakeWord inference locally using Android `AudioRecord` and ONNX Runtime. Its public README says it requires Android API 26+, while this project currently has `minSdkVersion = 24`. The port's code is Apache-2.0, the Google speech embedding model is Apache-2.0, and it documents built-in “Hey Jarvis”, “Alexa”, and “Hey Mycroft” models. Those pre-trained wake classifiers are CC BY-NC-SA 4.0 and are not appropriate to bundle in a commercial LORD AI build. Changing a model name does not change what it detects or its license.
 
-`android/app/src/main/AndroidManifest.xml` declares `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS`. The user must grant microphone access through the operating system/WebView before recognition starts. The app does not hide microphone activity or bypass permission prompts. Android background microphone use is intentionally not implemented: there is no microphone foreground service, persistent notification, foreground-service microphone permission, or native wake detector. Locking the screen or backgrounding LORD ends voice mode and requires the user to return and enable it again.
+openWakeWord's upstream code is Apache-2.0 and describes training custom classifiers from synthetic positive samples and negative audio. The repository does not include a “Hey Lord” model. A custom model could potentially be trained with no cash expenditure, but legal redistribution depends on the licenses and provenance of the speech-generation models, training data, shared inference assets, and resulting classifier. No license-cleared “Hey Lord” dataset, trained ONNX classifier, or model provenance record is present here, so this build cannot safely bundle or claim a working local detector. The exact missing deliverable is `hey_lord.onnx`, trained and validated from data with redistribution rights suitable for the LORD AI app, together with its license/provenance record and positive/negative test audio.
 
-Reliable background wake detection would require a separately designed native Android foreground service, visible notification, applicable foreground-service and microphone permissions, explicit user consent, and validation against current Android background-start rules and target device versions. None of those capabilities should be inferred from browser `SpeechRecognition` callbacks.
+The Kotlin port is a small third-party integration (the public repository currently shows version 0.1.0 and three commits). It needs a compatibility review and API 26+ decision before adoption. Its README documents the custom model API and ONNX tensor shapes; real-device performance, accuracy, and dependency maintenance have not been verified in LORD AI.
 
-## Audio and privacy
+## Background feasibility
 
-The microphone is requested only after a user action. Raw recordings are not stored by LORD or sent to LORD's chat endpoint; the recognized transcript is sent through the existing authenticated `/api/chat` path and voice messages are saved under the signed-in user's conversation history. The browser or Android speech recognition provider may process audio according to its own behavior and privacy terms. If recognition is unavailable, denied, interrupted, or offline, LORD keeps typed chat available.
+The app already requests `RECORD_AUDIO`; it does not declare `FOREGROUND_SERVICE` or `FOREGROUND_SERVICE_MICROPHONE` and has no native audio service. On Android 14+ a microphone foreground service must declare the microphone service type and permission, and satisfy the runtime microphone permission prerequisites. Android restricts starting such services from the background, so a user-consented start would need to happen while LORD AI is visible. Android also restricts apps from launching activities from the background; a notification with a user-tapped pending intent is the reliable fallback. Force-stop, reboot, service stop, and locked-screen behavior are not implemented or verified.
 
-## Verification
+No foreground service, overlay permission, or new Android permission has been added without a valid detector to run in it. The floating panel remains inside the LORD AI app. Future background work should use an explicit user-started microphone service, persistent notification and stop control, then notification-to-app navigation when the OS does not allow an activity launch.
 
-Automated tests cover wake phrase matching, bounded restart behavior, and microphone permission handling. Physical Android devices are still needed to verify WebView permission prompts, speech-service availability, headset routing, audio focus, interruptions, and behavior across OS versions. No claim of background wake-word reliability is made.
+## Verification status
+
+Text matcher unit tests are not positive/negative acoustic model tests. No audio samples have been tested against a “Hey Lord” model, because there is no such model in the project. There has been no physical-device wake-word, background, lock-screen, or force-stop verification.

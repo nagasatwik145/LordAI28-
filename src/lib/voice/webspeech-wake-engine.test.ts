@@ -68,6 +68,10 @@ describe("WebSpeechWakeEngine", () => {
       ],
     });
     expect(onWake).toHaveBeenCalledWith("Hey, LORD", "what's next?");
+    recognizers[0].onresult?.({
+      results: [{ isFinal: true, 0: { transcript: "Hey, LORD, what's next?" } }],
+    });
+    expect(onWake).toHaveBeenCalledOnce();
     await engine.stop();
   });
 

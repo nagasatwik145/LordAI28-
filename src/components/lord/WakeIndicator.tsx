@@ -6,7 +6,7 @@ import { useWakeWord } from "./WakeWordProvider";
  * WakeIndicator - Shows voice input status in the corner
  */
 export function WakeIndicator() {
-  const { enabled, supported, enable, stop } = useWakeWord();
+  const { enabled, supported, stop } = useWakeWord();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -14,7 +14,7 @@ export function WakeIndicator() {
     if (enabled) {
       stop();
       if (location.pathname === "/voice") return;
-    } else void enable();
+    }
     void navigate({ to: "/voice" });
   };
 
@@ -24,7 +24,7 @@ export function WakeIndicator() {
     <button
       onClick={openVoiceAssistant}
       disabled={!supported}
-      className="fixed bottom-24 right-6 z-40 hidden h-12 w-12 items-center justify-center rounded-full transition-all md:bottom-6 md:flex"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full transition-all md:bottom-6 md:right-6"
       aria-label={enabled ? "Stop voice assistant" : "Open voice assistant and enable microphone"}
       aria-pressed={enabled}
       style={{

@@ -7,12 +7,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useLocation, useNavigate } from "@tanstack/react-router";
 import { App } from "@capacitor/app";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
+import { useLocation } from "@tanstack/react-router";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import { useQueryClient } from "@tanstack/react-query";
-import { createWakeEngine, type WakeEngine } from "@/lib/voice";
 import { getSpeechRecognitionConstructor } from "@/lib/voice/webspeech-wake-engine";
 import { monitoring } from "@/lib/monitoring-service";
 import type { LordMode } from "@/lib/modes";
@@ -44,6 +43,7 @@ type LegacyWakeStatus =
 interface WakeWordContextValue {
   enabled: boolean;
   supported: boolean;
+  wakeWordAvailable: boolean;
   status: LegacyWakeStatus;
   state: VoiceAssistantState;
   errorMessage: string;
@@ -105,9 +105,8 @@ export function WakeWordProvider({
   autoSpeak?: boolean;
   voiceRate?: number;
 }) {
-  const location = useLocation();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [state, setState] = useState<VoiceAssistantState>("disabled");
   const [errorMessage, setErrorMessage] = useState("");
   const [transcript, setTranscript] = useState("");
@@ -119,13 +118,9 @@ export function WakeWordProvider({
   const [supported, setSupported] = useState(false);
   const [voiceOutputSupported, setVoiceOutputSupported] = useState(false);
   const voiceOutputOverrideRef = useRef(false);
-  const engineRef = useRef<WakeEngine | null>(null);
   const pipelineRef = useRef<VoicePipeline | null>(null);
-  const returnToWakeRef = useRef(false);
   const permissionRequestRef = useRef(0);
   const permissionInFlightRef = useRef(false);
-  const wakeStartRef = useRef<Promise<void> | null>(null);
-  const wakeGenerationRef = useRef(0);
   const commandHandlerRef = useRef<((text: string) => boolean) | null>(null);
   const proStatusRef = useRef<boolean | null>(null);
   const enabledRef = useRef(false);
@@ -160,13 +155,8 @@ export function WakeWordProvider({
 
   const stop = useCallback(() => {
     permissionRequestRef.current += 1;
-    wakeGenerationRef.current += 1;
     permissionInFlightRef.current = false;
-    wakeStartRef.current = null;
     enabledRef.current = false;
-    returnToWakeRef.current = false;
-    void engineRef.current?.stop();
-    engineRef.current = null;
     pipelineRef.current?.stop();
     updateState("disabled");
   }, [updateState]);
@@ -196,12 +186,8 @@ export function WakeWordProvider({
     const pipeline = new VoicePipeline(mode, voiceOutputEnabled, voiceRate);
     pipeline.onStatusChange = (pipelineStatus: VoicePipelineStatus) => {
       if (pipelineStatus === "wake_listening") {
-        if (enabledRef.current && returnToWakeRef.current) {
-          void beginWakeListeningRef.current?.();
-        } else {
-          enabledRef.current = false;
-          updateState("disabled");
-        }
+        enabledRef.current = false;
+        updateState("disabled");
       } else {
         updateState(pipelineStatus);
       }
@@ -224,101 +210,13 @@ export function WakeWordProvider({
     return pipeline;
   }, [mode, queryClient, updateState, voiceOutputEnabled, voiceRate]);
 
-  const beginWakeListeningRef = useRef<(() => Promise<void>) | null>(null);
-  const beginWakeListening = useCallback(async () => {
-    if (!enabledRef.current || engineRef.current) return;
-    if (wakeStartRef.current) return wakeStartRef.current;
-    const generation = wakeGenerationRef.current;
-    setErrorMessage("");
-    setTranscript("");
-    const starting = (async () => {
-      try {
-        const engine = await createWakeEngine(
-          (phrase, command) => {
-            engineRef.current = null;
-            returnToWakeRef.current = true;
-            setWakePhrase(phrase);
-            setTranscript(phrase);
-            setErrorMessage("");
-            updateState("activated");
-            if (location.pathname !== "/voice") void navigate({ to: "/voice" });
-            const pipeline = wirePipeline();
-            window.setTimeout(() => {
-              if (!enabledRef.current) return;
-              if (command) void pipeline.submitText(command);
-              else pipeline.startListening();
-            }, 250);
-          },
-          setTranscript,
-          (message) => {
-            engineRef.current = null;
-            setErrorMessage(message);
-            enabledRef.current = false;
-            updateState("error");
-          },
-          () => {
-            engineRef.current = null;
-            setErrorMessage(
-              "Continuous recognition stopped. Tap the microphone to retry, or use tap-to-talk.",
-            );
-            enabledRef.current = false;
-            updateState("error");
-          },
-        );
-        if (!enabledRef.current || generation !== wakeGenerationRef.current) {
-          await engine.stop();
-          return;
-        }
-        engineRef.current = engine;
-        updateState("wake_listening");
-      } catch (error) {
-        if (generation !== wakeGenerationRef.current) return;
-        enabledRef.current = false;
-        setErrorMessage(error instanceof Error ? error.message : "Wake-word recognition failed.");
-        updateState("error");
-      }
-    })();
-    wakeStartRef.current = starting;
-    try {
-      await starting;
-    } finally {
-      if (wakeStartRef.current === starting) wakeStartRef.current = null;
-    }
-  }, [location.pathname, navigate, updateState, wirePipeline]);
-  beginWakeListeningRef.current = beginWakeListening;
-
   const enable = useCallback(async () => {
-    if (!(await checkProAccess())) return;
-    // A recognition failure leaves voice opted in, but stops the engine.
-    // Let the explicit retry control create a fresh recognition session.
-    if ((enabledRef.current && stateRef.current !== "error") || permissionInFlightRef.current)
-      return;
-    if (!supported) {
-      setErrorMessage(
-        "Speech recognition is not supported here. Use the text command box instead.",
-      );
-      updateState("error");
-      return;
-    }
-    permissionInFlightRef.current = true;
-    const requestId = ++permissionRequestRef.current;
-    updateState("requesting_permission");
-    setErrorMessage("");
-    try {
-      await requestVoiceMicrophonePermission();
-      if (requestId !== permissionRequestRef.current) return;
-      enabledRef.current = true;
-      returnToWakeRef.current = true;
-      await beginWakeListening();
-    } catch (error) {
-      if (requestId !== permissionRequestRef.current) return;
-      enabledRef.current = false;
-      setErrorMessage(microphonePermissionError(error));
-      updateState("error");
-    } finally {
-      if (requestId === permissionRequestRef.current) permissionInFlightRef.current = false;
-    }
-  }, [beginWakeListening, checkProAccess, supported, updateState]);
+    enabledRef.current = false;
+    setErrorMessage(
+      "A local ‘Hey Lord’ wake-word model is not bundled yet. Use Tap to Talk for voice commands.",
+    );
+    updateState("error");
+  }, [updateState]);
 
   const startTapToTalk = useCallback(async () => {
     if (!(await checkProAccess())) return;
@@ -327,41 +225,29 @@ export function WakeWordProvider({
       updateState("error");
       return;
     }
-    if (!enabledRef.current) {
-      if (permissionInFlightRef.current) return;
-      permissionInFlightRef.current = true;
-      const requestId = ++permissionRequestRef.current;
-      updateState("requesting_permission");
-      try {
-        await requestVoiceMicrophonePermission();
-        if (requestId !== permissionRequestRef.current) return;
-      } catch (error) {
-        if (requestId !== permissionRequestRef.current) return;
-        setErrorMessage(microphonePermissionError(error));
-        updateState("error");
-        return;
-      } finally {
-        if (requestId === permissionRequestRef.current) permissionInFlightRef.current = false;
-      }
+    if (permissionInFlightRef.current) return;
+    permissionInFlightRef.current = true;
+    const requestId = ++permissionRequestRef.current;
+    if (!enabledRef.current) updateState("requesting_permission");
+    try {
+      if (!enabledRef.current) await requestVoiceMicrophonePermission();
+      if (requestId !== permissionRequestRef.current) return;
       enabledRef.current = true;
-      returnToWakeRef.current = false;
-    } else {
-      returnToWakeRef.current = stateRef.current === "wake_listening";
+    } catch (error) {
+      if (requestId !== permissionRequestRef.current) return;
+      enabledRef.current = false;
+      setErrorMessage(microphonePermissionError(error));
+      updateState("error");
+      return;
+    } finally {
+      if (requestId === permissionRequestRef.current) permissionInFlightRef.current = false;
     }
-    const wakeEngine = engineRef.current;
-    engineRef.current = null;
-    await wakeEngine?.stop();
     wirePipeline().startListening();
   }, [checkProAccess, supported, updateState, wirePipeline]);
 
   const submitText = useCallback(
     async (text: string) => {
       if (!(await checkProAccess())) return;
-      if (enabledRef.current && stateRef.current === "wake_listening") {
-        returnToWakeRef.current = true;
-        void engineRef.current?.stop();
-        engineRef.current = null;
-      }
       await wirePipeline().submitText(text);
     },
     [checkProAccess, wirePipeline],
@@ -369,9 +255,6 @@ export function WakeWordProvider({
   const stopListening = useCallback(() => {
     if (stateRef.current !== "command_listening") return;
     enabledRef.current = false;
-    returnToWakeRef.current = false;
-    void engineRef.current?.stop();
-    engineRef.current = null;
     pipelineRef.current?.stopListening();
     updateState("disabled");
   }, [updateState]);
@@ -410,6 +293,10 @@ export function WakeWordProvider({
   }, [enable, stop]);
 
   useEffect(() => {
+    if (location.pathname !== "/voice" && enabledRef.current) stop();
+  }, [location.pathname, stop]);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem(VOICE_OUTPUT_KEY);
       if (saved !== null) {
@@ -426,12 +313,6 @@ export function WakeWordProvider({
   useEffect(() => {
     pipelineRef.current?.setVoiceOutput(voiceOutputEnabled);
   }, [voiceOutputEnabled]);
-
-  useEffect(() => {
-    if (enabledRef.current && location.pathname !== "/voice") {
-      stop();
-    }
-  }, [location.pathname, stop]);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -493,7 +374,6 @@ export function WakeWordProvider({
   useEffect(
     () => () => {
       enabledRef.current = false;
-      void engineRef.current?.stop();
       pipelineRef.current?.stop();
     },
     [],
@@ -503,6 +383,7 @@ export function WakeWordProvider({
   const value: WakeWordContextValue = {
     enabled: enabledRef.current || state === "requesting_permission",
     supported,
+    wakeWordAvailable: false,
     status: legacyStatus,
     state,
     errorMessage,

@@ -131,6 +131,7 @@ function Command() {
         />
         <div className="relative z-10 grid items-center gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:gap-4">
           <motion.div
+            className="min-w-0 order-2 md:order-1"
             initial={reduceMotion ? false : { opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.55, ease: [0.22, 1, 0.36, 1] }}
@@ -225,7 +226,7 @@ function Command() {
             </div>
           </motion.div>
           <motion.div
-            className="lord-orb-stage relative mx-auto -my-3 block md:my-0 md:-mr-2"
+            className="lord-orb-stage relative order-1 mx-auto -my-3 block md:order-2 md:my-0 md:-mr-2"
             initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{

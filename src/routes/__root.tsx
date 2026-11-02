@@ -21,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DEFAULT_MODE, type LordMode } from "../lib/modes";
 import { supabase } from "../integrations/supabase/client";
 import { X } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import { GlobalFooter } from "../components/lord/GlobalFooter";
 import {
   decideConnectivity,
@@ -222,10 +223,31 @@ function RootComponent() {
 
   useEffect(() => {
     setupApiInterceptor();
-    void import("../lib/mobile-native").then(({ initializeMobileRuntime }) =>
-      initializeMobileRuntime(),
-    );
     let disposed = false;
+    let splashHidden = false;
+    let firstPaintFrame = 0;
+    let secondPaintFrame = 0;
+    const hideSplash = () => {
+      if (disposed || splashHidden) return;
+      splashHidden = true;
+      window.clearTimeout(splashFallbackTimer);
+      void import("@capacitor/splash-screen")
+        .then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 180 }))
+        .catch(() => undefined);
+    };
+    let splashFallbackTimer: number | undefined;
+    if (Capacitor.isNativePlatform()) {
+      // Native/plugin startup must never strand users on the launch screen.
+      splashFallbackTimer = window.setTimeout(hideSplash, 1800);
+      void import("../lib/mobile-native")
+        .then(({ initializeMobileRuntime }) => initializeMobileRuntime())
+        .then(() => {
+          firstPaintFrame = window.requestAnimationFrame(() => {
+            secondPaintFrame = window.requestAnimationFrame(hideSplash);
+          });
+        })
+        .catch(hideSplash);
+    }
     let removeListeners: () => void = () => {};
     let removeOAuthListener: () => void = () => {};
     void import("../lib/native-oauth")
@@ -260,6 +282,9 @@ function RootComponent() {
       });
     return () => {
       disposed = true;
+      if (splashFallbackTimer !== undefined) window.clearTimeout(splashFallbackTimer);
+      window.cancelAnimationFrame(firstPaintFrame);
+      window.cancelAnimationFrame(secondPaintFrame);
       removeListeners();
       removeOAuthListener();
     };
