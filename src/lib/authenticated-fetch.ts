@@ -33,6 +33,7 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
   const { session, refreshAttempted } = await getUsableSession();
   const authHeaders = authorizationHeader(session);
   const headers = new Headers(init.headers);
+  headers.set("Accept", headers.get("Accept") ?? "application/json, text/event-stream");
 
   for (const [key, value] of Object.entries(authHeaders)) {
     headers.set(key, value);
@@ -44,6 +45,7 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
   );
   const response = await fetch(input, {
     ...init,
+    credentials: "same-origin",
     headers,
   });
 
@@ -65,5 +67,5 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
     return response;
 
   headers.set("Authorization", `Bearer ${newSession.access_token}`);
-  return fetch(retryInput, { ...init, headers });
+  return fetch(retryInput, { ...init, credentials: "same-origin", headers });
 }

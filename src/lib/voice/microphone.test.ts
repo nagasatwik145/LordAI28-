@@ -33,6 +33,22 @@ describe("voice microphone access", () => {
     );
   });
 
+  it("preserves a denied permission result for the voice UI", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn().mockRejectedValue(new DOMException("Denied", "NotAllowedError")),
+      },
+    });
+
+    try {
+      await requestVoiceMicrophonePermission();
+      throw new Error("Expected microphone access to be denied.");
+    } catch (error) {
+      expect(error).toMatchObject({ name: "NotAllowedError" });
+      expect(microphonePermissionError(error)).toContain("permission was denied");
+    }
+  });
+
   it("does not claim permission when no media device API is available", async () => {
     vi.stubGlobal("navigator", {});
     await expect(requestVoiceMicrophonePermission()).rejects.toThrow(

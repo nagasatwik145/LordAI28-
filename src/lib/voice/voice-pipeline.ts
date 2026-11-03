@@ -33,6 +33,44 @@ function splitSpeechText(text: string, maxLength = 1200): string[] {
   });
 }
 
+type VoiceFailureStage =
+  "conversation" | "user_message" | "chat_request" | "response" | "assistant_message";
+
+function describeFailure(error: unknown, stage: VoiceFailureStage): string {
+  const value = error && typeof error === "object" ? (error as Record<string, unknown>) : null;
+  const code = typeof value?.code === "string" ? value.code : undefined;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof value?.message === "string"
+        ? value.message
+        : "";
+  const stageText: Record<VoiceFailureStage, string> = {
+    conversation: "Could not create a voice conversation.",
+    user_message: "Could not save your voice command.",
+    chat_request: "Could not reach LORD's chat service.",
+    response: "LORD could not complete the response.",
+    assistant_message: "LORD replied, but the response could not be saved.",
+  };
+  const safeCode = code && /^[A-Z0-9_-]{2,20}$/i.test(code) ? ` (${code})` : "";
+  if (stage === "chat_request" && /failed to fetch|networkerror/i.test(message)) {
+    return "Could not reach LORD's chat service. Check your connection and try again.";
+  }
+  if (stage === "conversation" || stage === "user_message" || stage === "assistant_message") {
+    if (code === "42501")
+      return "LORD could not save this conversation because database access was denied. Sign in again, then retry.";
+    if (code === "23505")
+      return "This voice message was already saved. Retry the command to continue.";
+    return `${stageText[stage]}${safeCode} Check your connection and retry.`;
+  }
+  if (message && error instanceof Error) return message;
+  return `${stageText[stage]}${safeCode} Retry your command.`;
+}
+
+function logVoiceEvent(event: string, details: Record<string, unknown> = {}) {
+  console.info(JSON.stringify({ event: `voice_${event}`, ...details }));
+}
+
 export class VoicePipeline {
   private recognition: SpeechRecognitionLike | null = null;
   private abortController: AbortController | null = null;
@@ -48,6 +86,13 @@ export class VoicePipeline {
   private speechStoppedByUser = false;
   private speaking = false;
   private cancelled = false;
+  private requestGeneration = 0;
+  private speechGeneration = 0;
+  private pendingAssistantSave: {
+    message: VoiceMessage;
+    conversationId: string;
+    userId: string;
+  } | null = null;
 
   onStatusChange: (status: VoicePipelineStatus) => void = () => {};
   onTranscript: (text: string) => void = () => {};
@@ -75,6 +120,7 @@ export class VoicePipeline {
     this.stopSpeaking();
     const Recognition = getSpeechRecognitionConstructor();
     if (!Recognition) {
+      logVoiceEvent("recognition_unavailable");
       this.onError(
         "Speech recognition is not supported in this browser. Use the text command box.",
       );
@@ -83,6 +129,7 @@ export class VoicePipeline {
     }
 
     const recognition = new Recognition();
+    logVoiceEvent("recognition_initialized", { browserApi: "Web Speech API" });
     recognition.lang = "en-US";
     recognition.continuous = false;
     recognition.interimResults = true;
@@ -103,21 +150,33 @@ export class VoicePipeline {
         .trim();
       if (finalTranscript && !finalHandled) {
         finalHandled = true;
+        logVoiceEvent("transcript_captured", { characters: finalTranscript.length });
         this.stopListening();
         if (this.onCommand?.(finalTranscript)) {
           this.onStatusChange("review");
           return;
         }
         void this.processSpeech(finalTranscript);
+      } else if (Array.from(event.results).some((result) => result.isFinal) && !finalHandled) {
+        finalHandled = true;
+        this.stopListening();
+        this.onError(
+          "I couldn't make out any words. Tap to talk and try again, or type your command.",
+        );
+        this.onStatusChange("error");
       }
     };
     recognition.onerror = (event) => {
       if (this.recognition !== recognition) return;
       if (event.error === "aborted") return;
+      logVoiceEvent("recognition_error", { code: event.error ?? "unknown" });
       if (event.error === "no-speech") {
-        this.onStatusChange("wake_listening");
+        this.detachRecognition(recognition, true);
+        this.onError("I didn't hear any speech. Tap to talk and try again, or type your command.");
+        this.onStatusChange("error");
         return;
       }
+      this.detachRecognition(recognition, true);
       this.onError(
         event.error === "not-allowed" || event.error === "service-not-allowed"
           ? "Microphone permission was denied. Allow access and try again."
@@ -131,15 +190,17 @@ export class VoicePipeline {
     };
     recognition.onend = () => {
       if (this.recognition !== recognition) return;
-      this.recognition = null;
+      this.detachRecognition(recognition);
       if (!finalHandled && !this.processing) this.onStatusChange("wake_listening");
     };
     this.recognition = recognition;
     try {
       recognition.start();
+      logVoiceEvent("recognition_started");
       this.onStatusChange("command_listening");
       return true;
     } catch {
+      logVoiceEvent("recognition_start_failed");
       this.recognition = null;
       this.onError("Speech recognition could not start. Use the text command box or retry.");
       this.onStatusChange("error");
@@ -158,7 +219,44 @@ export class VoicePipeline {
 
   async retryLast() {
     if (!this.failedUserMessage || this.processing) return;
+    if (this.pendingAssistantSave) {
+      await this.retryAssistantSave();
+      return;
+    }
     await this.processSpeech(this.failedUserMessage.text, true);
+  }
+
+  private async retryAssistantSave() {
+    const pending = this.pendingAssistantSave;
+    if (!pending || this.processing) return;
+    this.processing = true;
+    this.onStatusChange("processing");
+    try {
+      const { error } = await supabase.from("messages").insert({
+        id: pending.message.id,
+        conversation_id: pending.conversationId,
+        user_id: pending.userId,
+        role: "assistant",
+        content: pending.message.text,
+        model: this.mode,
+      });
+      if (error) throw new Error(describeFailure(error, "assistant_message"), { cause: error });
+      await supabase
+        .from("conversations")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", pending.conversationId);
+      this.pendingAssistantSave = null;
+      this.failedUserMessage = null;
+      this.failedUserSaved = false;
+      this.onStatusChange("wake_listening");
+    } catch (error) {
+      this.onError(
+        error instanceof Error ? error.message : describeFailure(error, "assistant_message"),
+      );
+      this.onStatusChange("error");
+    } finally {
+      this.processing = false;
+    }
   }
 
   private async ensureConversation(firstText: string): Promise<{ id: string; userId: string }> {
@@ -206,6 +304,7 @@ export class VoicePipeline {
     this.conversationId = conversationId;
     this.failedUserMessage = null;
     this.failedUserSaved = false;
+    this.pendingAssistantSave = null;
     this.messages = (rows ?? [])
       .filter(
         (row): row is typeof row & { role: "user" | "assistant" } =>
@@ -223,6 +322,7 @@ export class VoicePipeline {
     this.conversationId = null;
     this.failedUserMessage = null;
     this.failedUserSaved = false;
+    this.pendingAssistantSave = null;
     this.messages = [];
     this.onConversationChange(null);
     this.onMessagesChange([]);
@@ -233,10 +333,13 @@ export class VoicePipeline {
   private async processSpeech(rawText: string, retry = false) {
     const text = rawText.trim();
     if (!text || this.processing) return;
+    let failureStage: VoiceFailureStage = "conversation";
     this.cancelled = false;
+    const generation = ++this.requestGeneration;
     this.stopListening();
     this.processing = true;
     this.onStatusChange("processing");
+    logVoiceEvent("request_started", { retry, messageCount: this.messages.length });
 
     let userMessage = retry ? this.failedUserMessage : null;
     if (!userMessage) {
@@ -249,6 +352,7 @@ export class VoicePipeline {
 
     try {
       const { id: conversationId, userId } = await this.ensureConversation(text);
+      if (generation !== this.requestGeneration) return;
       if (!this.failedUserSaved) {
         const { error } = await supabase.from("messages").insert({
           id: userMessage.id,
@@ -258,7 +362,12 @@ export class VoicePipeline {
           content: userMessage.text,
           model: this.mode,
         });
-        if (error) throw error;
+        if (generation !== this.requestGeneration) return;
+        if (error)
+          throw Object.assign(new Error(describeFailure(error, "user_message")), {
+            cause: error,
+            voiceStage: "user_message",
+          });
         this.failedUserSaved = true;
         await supabase
           .from("conversations")
@@ -276,12 +385,24 @@ export class VoicePipeline {
       };
       const abortController = new AbortController();
       this.abortController = abortController;
-      const response = await authenticatedFetch(`${getApiBaseUrl()}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Lord-Voice-Mode": "true" },
-        body: JSON.stringify(body),
-        signal: abortController.signal,
+      failureStage = "chat_request";
+      logVoiceEvent("api_request_started", {
+        endpoint: "/api/chat",
+        messageCount: body.messages.length,
       });
+      let response: Response;
+      try {
+        response = await authenticatedFetch(`${getApiBaseUrl()}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Lord-Voice-Mode": "true" },
+          body: JSON.stringify(body),
+          signal: abortController.signal,
+        });
+      } catch (error) {
+        throw new Error(describeFailure(error, "chat_request"), { cause: error });
+      }
+      if (generation !== this.requestGeneration) return;
+      logVoiceEvent("api_response", { status: response.status, ok: response.ok });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as {
           error?: { message?: string };
@@ -294,8 +415,12 @@ export class VoicePipeline {
         );
       }
 
+      failureStage = "response";
       const answer = await streamTextLines(response, (partial) => this.onResponse(partial));
+      if (generation !== this.requestGeneration) return;
+      this.abortController = null;
       if (!answer.trim()) throw new Error("LORD returned an empty response. Retry your command.");
+      logVoiceEvent("response_completed", { characters: answer.length });
       const assistantMessage: VoiceMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -312,8 +437,15 @@ export class VoicePipeline {
         content: answer,
         model: this.mode,
       });
-      if (saveError)
-        throw new Error(`The response arrived but could not be saved: ${saveError.message}`);
+      if (generation !== this.requestGeneration) return;
+      if (saveError) {
+        failureStage = "assistant_message";
+        this.pendingAssistantSave = { message: assistantMessage, conversationId, userId };
+        throw Object.assign(new Error(describeFailure(saveError, "assistant_message")), {
+          cause: saveError,
+          voiceStage: "assistant_message",
+        });
+      }
       await supabase
         .from("conversations")
         .update({ last_message_at: new Date().toISOString() })
@@ -321,76 +453,113 @@ export class VoicePipeline {
 
       this.failedUserMessage = null;
       this.failedUserSaved = false;
+      this.pendingAssistantSave = null;
       this.processing = false;
       if (this.autoSpeak && this.speak(answer)) this.onStatusChange("speaking");
       else this.onStatusChange("wake_listening");
     } catch (error) {
+      if (generation !== this.requestGeneration) return;
       this.processing = false;
       this.abortController = null;
       if (error instanceof Error && error.name === "AbortError") return;
-      this.onError(
-        error instanceof Error
-          ? error.message
-          : "The voice request failed. Your transcript is saved here for retry.",
-      );
+      const markedStage =
+        error && typeof error === "object" && "voiceStage" in error
+          ? (error as { voiceStage?: VoiceFailureStage }).voiceStage
+          : undefined;
+      const message = error instanceof Error ? error.message : describeFailure(error, failureStage);
+      const cause = error instanceof Error ? error.cause : error;
+      const errorCode =
+        cause && typeof cause === "object" && "code" in cause
+          ? String((cause as { code?: unknown }).code ?? "")
+          : undefined;
+      logVoiceEvent("request_failed", {
+        stage: markedStage ?? failureStage,
+        errorType: error instanceof Error ? "Error" : "structured",
+        code: errorCode,
+      });
+      this.onError(message);
       this.onStatusChange("error");
     }
   }
 
   private speak(text: string): boolean {
-    if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) return false;
-    window.speechSynthesis.cancel();
-    this.speechStoppedByUser = false;
-    this.speaking = true;
-    const chunks = splitSpeechText(text);
-    let index = 0;
-    const speakNext = () => {
-      const part = chunks[index++]?.trim();
-      if (!part) {
-        this.speaking = false;
-        this.onStatusChange("wake_listening");
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(part);
-      utterance.rate = this.voiceRate;
-      utterance.onend = () => {
-        if (this.cancelled) return;
-        if (this.speechStoppedByUser) {
-          this.speechStoppedByUser = false;
-          this.speaking = false;
-          return;
-        }
-        speakNext();
-      };
-      utterance.onerror = () => {
-        if (this.cancelled) return;
-        if (this.speechStoppedByUser) {
-          this.speechStoppedByUser = false;
+    if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) {
+      logVoiceEvent("tts_unavailable");
+      this.onError("Spoken replies are unavailable here. LORD's text response is still available.");
+      return false;
+    }
+    try {
+      const speechGeneration = ++this.speechGeneration;
+      window.speechSynthesis.cancel();
+      this.speechStoppedByUser = false;
+      this.speaking = true;
+      const chunks = splitSpeechText(text);
+      let index = 0;
+      const speakNext = () => {
+        const part = chunks[index++]?.trim();
+        if (!part) {
           this.speaking = false;
           this.onStatusChange("wake_listening");
           return;
         }
-        this.speaking = false;
-        this.onError("Speech playback stopped. The text response is still available.");
-        this.onStatusChange("wake_listening");
+        const utterance = new SpeechSynthesisUtterance(part);
+        utterance.rate = this.voiceRate;
+        utterance.onstart = () =>
+          logVoiceEvent("tts_playback_started", { chunk: index, chunks: chunks.length });
+        utterance.onend = () => {
+          if (this.cancelled || speechGeneration !== this.speechGeneration) return;
+          logVoiceEvent("tts_chunk_completed", { chunk: index, chunks: chunks.length });
+          if (this.speechStoppedByUser) {
+            this.speechStoppedByUser = false;
+            this.speaking = false;
+            return;
+          }
+          speakNext();
+        };
+        utterance.onerror = () => {
+          if (this.cancelled || speechGeneration !== this.speechGeneration) return;
+          if (this.speechStoppedByUser) {
+            this.speechStoppedByUser = false;
+            this.speaking = false;
+            this.onStatusChange("wake_listening");
+            return;
+          }
+          this.speaking = false;
+          logVoiceEvent("tts_playback_failed");
+          this.onError("Speech playback stopped. The text response is still available.");
+          this.onStatusChange("wake_listening");
+        };
+        window.speechSynthesis.speak(utterance);
       };
-      window.speechSynthesis.speak(utterance);
-    };
-    speakNext();
-    return true;
+      speakNext();
+      return true;
+    } catch {
+      this.speaking = false;
+      logVoiceEvent("tts_playback_failed", { reason: "synchronous_error" });
+      this.onError("Spoken replies could not start. LORD's text response is still available.");
+      return false;
+    }
   }
 
   stopListening() {
     const recognition = this.recognition;
-    this.recognition = null;
+    if (recognition) this.detachRecognition(recognition, true);
+  }
+
+  private detachRecognition(recognition: SpeechRecognitionLike, abort = false) {
+    if (this.recognition === recognition) this.recognition = null;
+    recognition.onresult = null;
+    recognition.onerror = null;
+    recognition.onend = null;
     try {
-      recognition?.abort();
+      if (abort) recognition.abort();
     } catch {
       // Recognition may already have ended.
     }
   }
 
   stopSpeaking() {
+    this.speechGeneration += 1;
     if (this.speaking && typeof window !== "undefined" && "speechSynthesis" in window) {
       this.speechStoppedByUser = true;
       this.speaking = false;
@@ -401,6 +570,8 @@ export class VoicePipeline {
 
   stop() {
     this.cancelled = true;
+    this.requestGeneration += 1;
+    this.speechGeneration += 1;
     this.stopListening();
     this.speechStoppedByUser = true;
     this.speaking = false;

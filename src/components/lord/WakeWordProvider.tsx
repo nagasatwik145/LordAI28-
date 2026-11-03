@@ -10,7 +10,6 @@ import {
 import { App } from "@capacitor/app";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { useLocation } from "@tanstack/react-router";
-import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { getSpeechRecognitionConstructor } from "@/lib/voice/webspeech-wake-engine";
 import { monitoring } from "@/lib/monitoring-service";
@@ -21,6 +20,7 @@ import {
   type VoicePipelineStatus,
 } from "@/lib/voice/voice-pipeline";
 import {
+  getVoiceMicrophonePermission,
   microphonePermissionError,
   requestVoiceMicrophonePermission,
 } from "@/lib/voice/microphone";
@@ -122,7 +122,6 @@ export function WakeWordProvider({
   const permissionRequestRef = useRef(0);
   const permissionInFlightRef = useRef(false);
   const commandHandlerRef = useRef<((text: string) => boolean) | null>(null);
-  const proStatusRef = useRef<boolean | null>(null);
   const enabledRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -131,21 +130,6 @@ export function WakeWordProvider({
       Boolean(navigator.mediaDevices?.getUserMedia) && Boolean(getSpeechRecognitionConstructor()),
     );
     setVoiceOutputSupported("speechSynthesis" in window);
-  }, []);
-
-  const checkProAccess = useCallback(async () => {
-    try {
-      const response = await authenticatedFetch("/api/billing/status");
-      if (!response.ok) throw new Error("Plan status unavailable");
-      const result = (await response.json()) as { pro: boolean };
-      proStatusRef.current = result.pro;
-      if (!result.pro && typeof window !== "undefined") window.location.assign("/upgrade");
-      return result.pro;
-    } catch {
-      proStatusRef.current = false;
-      if (typeof window !== "undefined") window.location.assign("/upgrade");
-      return false;
-    }
   }, []);
 
   const updateState = useCallback((next: VoiceAssistantState) => {
@@ -219,7 +203,6 @@ export function WakeWordProvider({
   }, [updateState]);
 
   const startTapToTalk = useCallback(async () => {
-    if (!(await checkProAccess())) return;
     if (!supported) {
       setErrorMessage("Speech recognition is not supported. Use the text command box instead.");
       updateState("error");
@@ -228,13 +211,26 @@ export function WakeWordProvider({
     if (permissionInFlightRef.current) return;
     permissionInFlightRef.current = true;
     const requestId = ++permissionRequestRef.current;
+    void getVoiceMicrophonePermission().then((permission) => {
+      console.info(
+        JSON.stringify({ event: "voice_microphone_permission_state", state: permission }),
+      );
+    });
     if (!enabledRef.current) updateState("requesting_permission");
     try {
       if (!enabledRef.current) await requestVoiceMicrophonePermission();
+      console.info(JSON.stringify({ event: "voice_microphone_permission_result", granted: true }));
       if (requestId !== permissionRequestRef.current) return;
       enabledRef.current = true;
     } catch (error) {
       if (requestId !== permissionRequestRef.current) return;
+      console.warn(
+        JSON.stringify({
+          event: "voice_microphone_permission_result",
+          granted: false,
+          errorName: error instanceof Error ? error.name : "unknown",
+        }),
+      );
       enabledRef.current = false;
       setErrorMessage(microphonePermissionError(error));
       updateState("error");
@@ -243,14 +239,13 @@ export function WakeWordProvider({
       if (requestId === permissionRequestRef.current) permissionInFlightRef.current = false;
     }
     wirePipeline().startListening();
-  }, [checkProAccess, supported, updateState, wirePipeline]);
+  }, [supported, updateState, wirePipeline]);
 
   const submitText = useCallback(
     async (text: string) => {
-      if (!(await checkProAccess())) return;
       await wirePipeline().submitText(text);
     },
-    [checkProAccess, wirePipeline],
+    [wirePipeline],
   );
   const stopListening = useCallback(() => {
     if (stateRef.current !== "command_listening") return;
