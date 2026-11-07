@@ -36,6 +36,25 @@ function splitSpeechText(text: string, maxLength = 1200): string[] {
 type VoiceFailureStage =
   "conversation" | "user_message" | "chat_request" | "response" | "assistant_message";
 
+export function isMissingColumnError(error: unknown, columnName: string): boolean {
+  const value = error && typeof error === "object" ? (error as Record<string, unknown>) : null;
+  const code = typeof value?.code === "string" ? value.code : "";
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof value?.message === "string"
+        ? value.message
+        : "";
+  const normalizedMessage = message.toLowerCase();
+  if (code === "42703") return true;
+  const columnMatches =
+    normalizedMessage.includes(`.${columnName}`) ||
+    normalizedMessage.includes(`"${columnName}"`) ||
+    normalizedMessage.includes(` ${columnName}`) ||
+    normalizedMessage.includes(`${columnName}`);
+  return columnMatches && /does not exist|missing column/i.test(message);
+}
+
 function describeFailure(error: unknown, stage: VoiceFailureStage): string {
   const value = error && typeof error === "object" ? (error as Record<string, unknown>) : null;
   const code = typeof value?.code === "string" ? value.code : undefined;
@@ -264,16 +283,29 @@ export class VoicePipeline {
     if (authError || !data.user) throw new Error("Sign in to save and send voice conversations.");
     if (this.conversationId) return { id: this.conversationId, userId: data.user.id };
 
+    const title = firstText.slice(0, 60) || "Voice conversation";
+    const primaryInsert = {
+      user_id: data.user.id,
+      title,
+      metadata: { source: "voice" },
+    };
     const { data: conversation, error } = await supabase
       .from("conversations")
-      .insert({
-        user_id: data.user.id,
-        title: firstText.slice(0, 60) || "Voice conversation",
-        metadata: { source: "voice" },
-      })
+      .insert(primaryInsert)
       .select("id")
       .single();
-    if (error) throw error;
+    if (error && !isMissingColumnError(error, "metadata")) throw error;
+    if (error) {
+      const fallback = await supabase
+        .from("conversations")
+        .insert({ user_id: data.user.id, title })
+        .select("id")
+        .single();
+      if (fallback.error) throw fallback.error;
+      this.conversationId = fallback.data.id;
+      this.onConversationChange(fallback.data.id);
+      return { id: fallback.data.id, userId: data.user.id };
+    }
     this.conversationId = conversation.id;
     this.onConversationChange(conversation.id);
     return { id: conversation.id, userId: data.user.id };

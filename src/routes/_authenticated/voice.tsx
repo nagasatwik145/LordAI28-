@@ -27,6 +27,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePersistedState } from "@/lib/use-persisted-state";
 import { cn } from "@/lib/utils";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
+import { isMissingColumnError } from "@/lib/voice/voice-pipeline";
 import { parseVoiceMissionCommand, type VoiceMissionCommand } from "@/lib/voice/mission-command";
 
 export const Route = createFileRoute("/_authenticated/voice")({
@@ -124,15 +125,41 @@ function VoicePage() {
     queryKey: ["voice-conversations", userId],
     enabled: Boolean(userId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      const baseQuery = supabase
         .from("conversations")
         .select("id, title, last_message_at")
         .eq("user_id", userId!)
-        .contains("metadata", { source: "voice" })
         .order("last_message_at", { ascending: false })
         .limit(50);
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await baseQuery.contains("metadata", { source: "voice" });
+        if (error) {
+          if (isMissingColumnError(error, "metadata")) {
+            const { data: fallbackData, error: fallbackError } = await supabase
+              .from("conversations")
+              .select("id, title, last_message_at")
+              .eq("user_id", userId!)
+              .order("last_message_at", { ascending: false })
+              .limit(50);
+            if (fallbackError) throw fallbackError;
+            return fallbackData ?? [];
+          }
+          throw error;
+        }
+        return data ?? [];
+      } catch (error) {
+        if (isMissingColumnError(error, "metadata")) {
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from("conversations")
+            .select("id, title, last_message_at")
+            .eq("user_id", userId!)
+            .order("last_message_at", { ascending: false })
+            .limit(50);
+          if (fallbackError) throw fallbackError;
+          return fallbackData ?? [];
+        }
+        throw error;
+      }
     },
   });
 

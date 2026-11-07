@@ -93,6 +93,49 @@ describe("VoicePipeline", () => {
     );
   });
 
+  it("falls back when the metadata column has not been added to conversations yet", async () => {
+    const pipeline = new VoicePipeline("balanced", false);
+    const insertSpy = vi.fn((payload: Record<string, unknown>) => ({
+      select: () => ({
+        single: async () => {
+          if (payload.metadata) {
+            return {
+              data: null,
+              error: {
+                code: "42703",
+                message: "column conversations.metadata does not exist",
+              },
+            };
+          }
+          return { data: { id: conversationId }, error: null };
+        },
+      }),
+    }));
+    mocks.from.mockImplementation((table: string) => {
+      if (table === "conversations") {
+        return {
+          insert: insertSpy,
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return { insert: vi.fn().mockResolvedValue({ error: null }) };
+    });
+
+    await pipeline.submitText("Say hello");
+
+    expect(insertSpy).toHaveBeenCalledTimes(2);
+    expect(insertSpy.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        user_id: "user-1",
+        metadata: { source: "voice" },
+      }),
+    );
+    expect(insertSpy.mock.calls[1][0]).toEqual({
+      user_id: "user-1",
+      title: "Say hello",
+    });
+  });
+
   it("preserves a failed transcript and retries the same saved user message", async () => {
     const { messageInsert } = setupDatabase();
     mocks.authenticatedFetch

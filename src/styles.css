@@ -81,8 +81,11 @@
   --popover: #0b1220;
   --popover-foreground: #eaf6ff;
 
-  /* Electric cyan accent */
-  --primary: #22d3ee;
+  /* Official LORD AI identity */
+  --brand-blue: #0ea5ff;
+  --brand-blue-strong: #0077ff;
+  --brand-red: #d92d4f;
+  --primary: var(--brand-blue);
   --primary-foreground: #07131d;
 
   --secondary: #101b2b;
@@ -1410,5 +1413,332 @@ body::after {
   .ambient-particle,
   .lord-orb-host::before {
     animation: none !important;
+  }
+}
+
+
+
+/* =========================================================
+   LORD AI — CINEMATIC VISUAL UPGRADE
+   Append to the bottom of src/styles.css
+   ========================================================= */
+
+:root {
+  --lord-blue: #08aaff;
+  --lord-blue-bright: #39c5ff;
+  --lord-red: #f04459;
+  --lord-bg: #050a14;
+  --lord-surface: #0c1628;
+  --lord-surface-2: #111e33;
+}
+
+/* Cinematic atmospheric background */
+body {
+  background:
+    radial-gradient(
+      ellipse at 18% 15%,
+      rgba(0, 105, 255, 0.15),
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 85% 65%,
+      rgba(220, 35, 65, 0.075),
+      transparent 38%
+    ),
+    #050a14 !important;
+}
+
+/* More refined page surfaces */
+.glass-panel,
+.hud-panel {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(17, 31, 53, 0.94),
+      rgba(7, 14, 27, 0.97)
+    ) !important;
+  border: 1px solid rgba(65, 165, 255, 0.19) !important;
+  border-radius: 20px !important;
+  box-shadow:
+    0 20px 65px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+/* Stronger LORD brand identity */
+.lord-brand-mark {
+  filter:
+    drop-shadow(0 0 7px rgba(0, 160, 255, 0.55))
+    drop-shadow(0 0 20px rgba(0, 100, 255, 0.18));
+}
+
+/* Premium buttons */
+button[class*="bg-primary"],
+a[class*="bg-primary"] {
+  box-shadow: 0 5px 22px rgba(0, 160, 255, 0.17);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    filter 180ms ease;
+}
+
+button[class*="bg-primary"]:hover,
+a[class*="bg-primary"]:hover {
+  filter: brightness(1.12);
+  box-shadow: 0 7px 28px rgba(0, 160, 255, 0.29);
+}
+
+/* Voice assistant: use more of the available viewport */
+.voice-assistant {
+  max-width: 82rem !important;
+  min-height: calc(100svh - 5rem);
+  position: relative;
+}
+
+/* Large central orb */
+.voice-orb-state {
+  width: min(65vw, 35rem) !important;
+  max-width: 35rem;
+  margin: 1rem auto;
+  filter: drop-shadow(0 0 38px rgba(0, 160, 255, 0.12));
+}
+
+/* More immersive voice environment */
+.voice-assistant > section:first-of-type {
+  min-height: 68vh;
+  position: relative;
+  isolation: isolate;
+}
+
+.voice-assistant > section:first-of-type::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: min(75vw, 52rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(0, 145, 255, 0.105),
+    rgba(0, 80, 180, 0.035) 42%,
+    transparent 70%
+  );
+  filter: blur(22px);
+  pointer-events: none;
+}
+
+/* Voice status */
+.voice-assistant > section:first-of-type > p[aria-live="polite"] {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-shadow: 0 0 18px rgba(40, 190, 255, 0.32);
+}
+
+/* Mission control */
+.voice-assistant #voice-mission-title {
+  color: #9edfff;
+  letter-spacing: 0.04em;
+}
+
+.voice-assistant section[aria-labelledby="voice-mission-title"] {
+  max-width: 58rem;
+  width: 100%;
+  background: linear-gradient(
+    120deg,
+    rgba(14, 31, 52, 0.94),
+    rgba(10, 17, 31, 0.94)
+  );
+  border-color: rgba(65, 165, 255, 0.2);
+  border-radius: 18px;
+  box-shadow: 0 14px 45px rgba(0, 0, 0, 0.2);
+}
+
+/* Inputs */
+input,
+textarea {
+  caret-color: var(--lord-blue-bright);
+}
+
+input:focus,
+textarea:focus {
+  outline-color: var(--lord-blue);
+}
+
+/* Desktop refinement */
+@media (min-width: 1100px) {
+  .voice-assistant {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+
+  .voice-orb-state {
+    width: min(42vw, 35rem) !important;
+  }
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .voice-orb-state {
+    width: min(75vw, 27rem) !important;
+  }
+
+  .voice-assistant > section:first-of-type {
+    min-height: 55vh;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .voice-orb-state {
+    width: min(84vw, 23rem) !important;
+  }
+
+  .voice-assistant > section:first-of-type {
+    min-height: auto;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .voice-assistant header {
+    flex-wrap: wrap;
+  }
+
+  .voice-assistant section[aria-labelledby="voice-mission-title"] {
+    padding: 1rem;
+  }
+}
+
+/* Respect accessibility preferences */
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb-state {
+    filter: none;
+  }
+}
+
+
+/* =====================================================
+   LORD AI — VOICE INTERFACE V2
+   Targets the actual LordOrb component
+   ===================================================== */
+
+/* Give the voice page more room */
+main.voice-assistant {
+  max-width: 76rem !important;
+  min-height: calc(100svh - 5rem);
+  padding-left: clamp(1rem, 3vw, 3rem);
+  padding-right: clamp(1rem, 3vw, 3rem);
+}
+
+/* Enlarge the actual SVG orb, not just its wrapper */
+.voice-orb-state {
+  width: min(72vw, 38rem) !important;
+  max-width: 38rem !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.voice-orb-state .lord-orb-host {
+  width: min(72vw, 38rem) !important;
+  height: min(72vw, 38rem) !important;
+  max-width: 38rem;
+  max-height: 38rem;
+}
+
+/* Give the orb its own atmospheric stage */
+.voice-assistant > section:first-of-type {
+  min-height: 74vh;
+  width: 100%;
+  position: relative;
+  isolation: isolate;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.voice-assistant > section:first-of-type::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: min(90vw, 65rem);
+  aspect-ratio: 1;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      rgba(0, 157, 255, 0.16),
+      rgba(0, 75, 190, 0.06) 42%,
+      transparent 70%
+    );
+  filter: blur(30px);
+  pointer-events: none;
+}
+
+/* Improve the voice controls */
+.voice-assistant button {
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.voice-assistant button:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+/* Larger mission control panel */
+.voice-assistant section[aria-labelledby="voice-mission-title"] {
+  max-width: 58rem;
+  border-radius: 20px;
+  padding: 1.25rem;
+  background: linear-gradient(
+    135deg,
+    rgba(13, 31, 54, 0.94),
+    rgba(8, 15, 29, 0.97)
+  );
+  border-color: rgba(0, 165, 255, 0.24);
+}
+
+/* Better conversation area */
+.voice-assistant > section:last-of-type {
+  max-width: 58rem;
+  width: 100%;
+}
+
+/* Large displays */
+@media (min-width: 1400px) {
+  .voice-orb-state .lord-orb-host {
+    width: 40rem !important;
+    height: 40rem !important;
+  }
+}
+
+/* Tablets */
+@media (max-width: 900px) {
+  .voice-orb-state,
+  .voice-orb-state .lord-orb-host {
+    width: min(78vw, 30rem) !important;
+    height: min(78vw, 30rem) !important;
+  }
+
+  .voice-assistant > section:first-of-type {
+    min-height: 60vh;
+  }
+}
+
+/* Phones */
+@media (max-width: 600px) {
+  .voice-orb-state,
+  .voice-orb-state .lord-orb-host {
+    width: min(88vw, 23rem) !important;
+    height: min(88vw, 23rem) !important;
+  }
+
+  .voice-assistant > section:first-of-type {
+    min-height: auto;
   }
 }

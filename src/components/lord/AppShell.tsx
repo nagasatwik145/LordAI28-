@@ -114,35 +114,22 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Menu className="h-5 w-5" />
             </button>
             <Link to="/" className="flex min-w-0 items-center gap-3">
-              <motion.svg
-                aria-hidden="true"
-                viewBox="0 0 400 400"
-                className="lord-brand-mark h-9 w-9 shrink-0 text-[#4f8dff]"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+              <motion.img
+                src="/lord-icon.png"
+                alt=""
+                className="h-9 w-9 shrink-0 rounded-full object-contain shadow-[0_0_18px_rgba(14,165,255,0.55)]"
                 initial={reduceMotion ? false : { opacity: 0, scale: 0.94, rotate: -4 }}
                 animate={{ opacity: 1, scale: 1, rotate: 0 }}
                 whileHover={reduceMotion ? undefined : { rotate: 4, scale: 1.03 }}
                 whileTap={reduceMotion ? undefined : { scale: 0.97 }}
                 transition={{ duration: 0.28, ease: "easeOut" }}
                 style={{ transformOrigin: "center" }}
-              >
-                <g
-                  stroke="currentColor"
-                  strokeWidth="12"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M105 52C151 44 224 105 281 166C334 223 361 286 344 329C326 373 262 330 202 273C142 216 82 143 73 92C67 61 84 49 105 52Z" />
-                  <path d="M295 52C249 44 176 105 119 166C66 223 39 286 56 329C74 373 138 330 198 273C258 216 318 143 327 92C333 61 316 49 295 52Z" />
-                  <path d="M140 184L197 245L264 178" />
-                </g>
-              </motion.svg>
+              />
               <div className="min-w-0 leading-tight">
-                <div className="truncate font-display text-lg font-bold tracking-wider gradient-text">
+                <div className="truncate font-display text-lg font-bold tracking-[0.18em] text-white">
                   LORD
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                <div className="text-[10px] uppercase tracking-[0.42em] text-primary/90">
                   AI
                 </div>
               </div>

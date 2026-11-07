@@ -131,139 +131,181 @@ function AuthPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-md px-1">
-        <h1 className="mb-1 font-display text-2xl tracking-wide gradient-text text-glow sm:text-3xl">
-          {t.h}
-        </h1>
-        <p className="mb-6 text-sm text-muted-foreground">{t.sub}</p>
-
-        <HudPanel title={t.btn}>
-          <form onSubmit={submit} className="space-y-3">
-            {mode === "signin" && (
-              <>
-                <button
-                  type="button"
-                  onClick={signInWithGoogle}
-                  disabled={busy}
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-border/60 bg-background/50 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary hover:bg-primary/10 disabled:opacity-60"
-                >
-                  {busy ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Chrome className="h-4 w-4 text-primary" />
-                  )}
-                  Continue with Google
-                </button>
-                <div className="flex items-center gap-3 py-1">
-                  <span className="h-px flex-1 bg-border/60" />
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    or
-                  </span>
-                  <span className="h-px flex-1 bg-border/60" />
-                </div>
-              </>
-            )}
-            {mode === "signup" && (
-              <Field icon={UserIcon} label="Name">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  className="w-full bg-transparent text-base outline-none sm:text-sm"
-                />
-              </Field>
-            )}
-            <Field icon={Mail} label="Email">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@domain.com"
-                className="w-full bg-transparent text-base outline-none sm:text-sm"
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-1 xl:flex-row xl:items-stretch">
+        <div className="relative flex min-h-[420px] flex-1 overflow-hidden rounded-[28px] border border-primary/20 bg-[radial-gradient(circle_at_top,#163b73_0%,#081827_42%,#050b16_100%)] p-6 shadow-[0_28px_80px_rgba(14,165,255,0.14)] sm:p-8 xl:p-10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_70%,rgba(14,165,255,0.18),transparent_32%),radial-gradient(circle_at_80%_20%,rgba(217,45,79,0.18),transparent_20%)]" />
+          <div className="relative z-10 flex w-full flex-col justify-between">
+            <div className="flex items-center gap-4">
+              <img
+                src="/lord-icon.png"
+                alt="LORD AI icon"
+                className="h-16 w-16 shrink-0 rounded-full object-contain ring-2 ring-primary/70 ring-offset-2 ring-offset-slate-950 shadow-[0_0_26px_rgba(14,165,255,0.55)]"
               />
-            </Field>
-            {mode !== "forgot" && (
-              <Field icon={Lock} label="Password">
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-transparent text-base outline-none sm:text-sm"
-                />
-              </Field>
-            )}
-
-            {error && (
-              <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {error}
-              </p>
-            )}
-            {info && (
-              <p className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs text-primary">
-                {info}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={busy}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_0_18px_var(--hud)] transition hover:scale-[1.01] disabled:opacity-60"
-            >
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-              {t.btn}
-            </button>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-              {mode === "signin" ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("forgot");
-                      setError(null);
-                      setInfo(null);
-                    }}
-                    className="text-muted-foreground hover:text-primary"
-                  >
-                    Forgot password?
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("signup");
-                      setError(null);
-                      setInfo(null);
-                    }}
-                    className="text-muted-foreground hover:text-primary"
-                  >
-                    Create account →
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("signin");
-                    setError(null);
-                    setInfo(null);
-                  }}
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  ← Back to sign in
-                </button>
-              )}
+              <div>
+                <div className="font-display text-3xl font-black tracking-[0.18em] text-white sm:text-4xl">
+                  LORD
+                </div>
+                <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.52em] text-primary/90">
+                  AI
+                </div>
+              </div>
             </div>
-          </form>
-        </HudPanel>
 
-        <div className="mt-4 text-center">
-          <Link to="/" className="text-xs text-muted-foreground hover:text-primary">
-            ← Back to home
-          </Link>
+            <div className="max-w-md">
+              <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.28em] text-blue-200/80">
+                Personal command center
+              </p>
+              <h1 className="font-display text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
+                {t.h}
+              </h1>
+              <p className="mt-4 text-base text-slate-300">{t.sub}</p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_18px_rgba(14,165,255,0.85)]" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.34em] text-slate-300">
+                System online
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-auto w-full max-w-md px-1 xl:mx-0 xl:flex xl:items-center">
+          <div className="w-full">
+            <h2 className="mb-1 font-display text-2xl tracking-wide text-white sm:text-3xl">
+              {t.h}
+            </h2>
+            <p className="mb-6 text-sm text-muted-foreground">{t.sub}</p>
+
+            <HudPanel title={t.btn}>
+              <form onSubmit={submit} className="space-y-3">
+                {mode === "signin" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={signInWithGoogle}
+                      disabled={busy}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-border/60 bg-background/50 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary hover:bg-primary/10 disabled:opacity-60"
+                    >
+                      {busy ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Chrome className="h-4 w-4 text-primary" />
+                      )}
+                      Continue with Google
+                    </button>
+                    <div className="flex items-center gap-3 py-1">
+                      <span className="h-px flex-1 bg-border/60" />
+                      <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                        or
+                      </span>
+                      <span className="h-px flex-1 bg-border/60" />
+                    </div>
+                  </>
+                )}
+                {mode === "signup" && (
+                  <Field icon={UserIcon} label="Name">
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your name"
+                      className="w-full bg-transparent text-base outline-none sm:text-sm"
+                    />
+                  </Field>
+                )}
+                <Field icon={Mail} label="Email">
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@domain.com"
+                    className="w-full bg-transparent text-base outline-none sm:text-sm"
+                  />
+                </Field>
+                {mode !== "forgot" && (
+                  <Field icon={Lock} label="Password">
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-transparent text-base outline-none sm:text-sm"
+                    />
+                  </Field>
+                )}
+
+                {error && (
+                  <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    {error}
+                  </p>
+                )}
+                {info && (
+                  <p className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs text-primary">
+                    {info}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_0_18px_var(--hud)] transition hover:scale-[1.01] disabled:opacity-60"
+                >
+                  {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {t.btn}
+                </button>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                  {mode === "signin" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("forgot");
+                          setError(null);
+                          setInfo(null);
+                        }}
+                        className="text-muted-foreground hover:text-primary"
+                      >
+                        Forgot password?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("signup");
+                          setError(null);
+                          setInfo(null);
+                        }}
+                        className="text-muted-foreground hover:text-primary"
+                      >
+                        Create account →
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("signin");
+                        setError(null);
+                        setInfo(null);
+                      }}
+                      className="text-muted-foreground hover:text-primary"
+                    >
+                      ← Back to sign in
+                    </button>
+                  )}
+                </div>
+              </form>
+            </HudPanel>
+
+            <div className="mt-4 text-center">
+              <Link to="/" className="text-xs text-muted-foreground hover:text-primary">
+                ← Back to home
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </AppShell>
