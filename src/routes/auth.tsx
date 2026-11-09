@@ -46,7 +46,7 @@ function AuthPage() {
   const navigateAfterAuth = useCallback(() => {
     if (hasNavigatedAfterAuth.current) return;
     hasNavigatedAfterAuth.current = true;
-    navigate({ to: "/", replace: true });
+    navigate({ to: "/dashboard", replace: true });
   }, [navigate]);
 
   useEffect(() => {
@@ -103,7 +103,7 @@ function AuthPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: "/", replace: true });
+        navigate({ to: "/dashboard", replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed");
@@ -229,8 +229,8 @@ function AuthPage() {
             </span>
           </a>
           <div className="auth-nav-links">
-            <a href="#experience">Experience</a>
-            <a href="#intelligence">Intelligence</a>
+            <a href="/">Experience</a>
+            <a href="/intelligence">Intelligence</a>
             <button
               type="button"
               className="auth-nav-demo"

@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ExperienceRouteImport } from './routes/experience'
+import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
@@ -22,6 +24,7 @@ import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/c
 import { Route as AuthenticatedCommandCenterRouteRouteImport } from './routes/_authenticated/command-center/route'
 import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as AuthenticatedCreateApkaJalwaRouteImport } from './routes/_authenticated/create-apka-jalwa'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDeveloperLabRouteImport } from './routes/_authenticated/developer-lab'
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
 import { Route as AuthenticatedFeedRouteImport } from './routes/_authenticated/feed'
@@ -174,6 +177,16 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExperienceRoute = ExperienceRouteImport.update({
+  id: '/experience',
+  path: '/experience',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntelligenceRoute = IntelligenceRouteImport.update({
+  id: '/intelligence',
+  path: '/intelligence',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
   id: '/privacy-policy',
   path: '/privacy-policy',
@@ -227,6 +240,11 @@ const AuthenticatedCreateApkaJalwaRoute =
     path: '/create-apka-jalwa',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDeveloperLabRoute =
   AuthenticatedDeveloperLabRouteImport.update({
     id: '/developer-lab',
@@ -944,6 +962,8 @@ const ApiStudyPlansIdTasksTaskIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/experience': typeof ExperienceRoute
+  '/intelligence': typeof IntelligenceRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -954,6 +974,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof AuthenticatedChatRoute
   '/community': typeof AuthenticatedCommunityRoute
   '/create-apka-jalwa': typeof AuthenticatedCreateApkaJalwaRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
   '/developer-lab': typeof AuthenticatedDeveloperLabRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/feed': typeof AuthenticatedFeedRoute
@@ -1095,6 +1116,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/experience': typeof ExperienceRoute
+  '/intelligence': typeof IntelligenceRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -1104,6 +1127,7 @@ export interface FileRoutesByTo {
   '/chat': typeof AuthenticatedChatRoute
   '/community': typeof AuthenticatedCommunityRoute
   '/create-apka-jalwa': typeof AuthenticatedCreateApkaJalwaRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
   '/developer-lab': typeof AuthenticatedDeveloperLabRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/feed': typeof AuthenticatedFeedRoute
@@ -1247,6 +1271,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/experience': typeof ExperienceRoute
+  '/intelligence': typeof IntelligenceRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -1257,6 +1283,7 @@ export interface FileRoutesById {
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/community': typeof AuthenticatedCommunityRoute
   '/_authenticated/create-apka-jalwa': typeof AuthenticatedCreateApkaJalwaRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/developer-lab': typeof AuthenticatedDeveloperLabRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
   '/_authenticated/feed': typeof AuthenticatedFeedRoute
@@ -1400,6 +1427,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/experience'
+    | '/intelligence'
     | '/privacy-policy'
     | '/reset-password'
     | '/sitemap.xml'
@@ -1410,6 +1439,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/community'
     | '/create-apka-jalwa'
+    | '/dashboard'
     | '/developer-lab'
     | '/documents'
     | '/feed'
@@ -1551,6 +1581,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/experience'
+    | '/intelligence'
     | '/privacy-policy'
     | '/reset-password'
     | '/sitemap.xml'
@@ -1560,6 +1592,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/community'
     | '/create-apka-jalwa'
+    | '/dashboard'
     | '/developer-lab'
     | '/documents'
     | '/feed'
@@ -1702,6 +1735,8 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/experience'
+    | '/intelligence'
     | '/privacy-policy'
     | '/reset-password'
     | '/sitemap.xml'
@@ -1712,6 +1747,7 @@ export interface FileRouteTypes {
     | '/_authenticated/chat'
     | '/_authenticated/community'
     | '/_authenticated/create-apka-jalwa'
+    | '/_authenticated/dashboard'
     | '/_authenticated/developer-lab'
     | '/_authenticated/documents'
     | '/_authenticated/feed'
@@ -1855,6 +1891,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ExperienceRoute: typeof ExperienceRoute
+  IntelligenceRoute: typeof IntelligenceRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -1967,6 +2005,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/experience': {
+      id: '/experience'
+      path: '/experience'
+      fullPath: '/experience'
+      preLoaderRoute: typeof ExperienceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/intelligence': {
+      id: '/intelligence'
+      path: '/intelligence'
+      fullPath: '/intelligence'
+      preLoaderRoute: typeof IntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy-policy': {
       id: '/privacy-policy'
       path: '/privacy-policy'
@@ -2035,6 +2087,13 @@ declare module '@tanstack/react-router' {
       path: '/create-apka-jalwa'
       fullPath: '/create-apka-jalwa'
       preLoaderRoute: typeof AuthenticatedCreateApkaJalwaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/developer-lab': {
@@ -3046,6 +3105,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedCommunityRoute: typeof AuthenticatedCommunityRoute
   AuthenticatedCreateApkaJalwaRoute: typeof AuthenticatedCreateApkaJalwaRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDeveloperLabRoute: typeof AuthenticatedDeveloperLabRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
   AuthenticatedFeedRoute: typeof AuthenticatedFeedRoute
@@ -3086,6 +3146,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedCommunityRoute: AuthenticatedCommunityRoute,
   AuthenticatedCreateApkaJalwaRoute: AuthenticatedCreateApkaJalwaRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDeveloperLabRoute: AuthenticatedDeveloperLabRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
   AuthenticatedFeedRoute: AuthenticatedFeedRoute,
@@ -3221,6 +3282,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ExperienceRoute: ExperienceRoute,
+  IntelligenceRoute: IntelligenceRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
