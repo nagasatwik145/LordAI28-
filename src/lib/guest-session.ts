@@ -117,6 +117,8 @@ export async function buildGuestSessionCookieHeader(
   requestUrl: string,
   issuedAt = Date.now(),
 ) {
+  // Fail closed on server configuration before validating/signing caller data.
+  getGuestSigningSecret();
   if (!GUEST_SESSION_ID_PATTERN.test(sessionId)) {
     throw new Error("Guest session ID must be a UUID.");
   }

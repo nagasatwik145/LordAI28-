@@ -1,18 +1,34 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import { getOAuthRedirect } from "@/lib/native-oauth";
-import { AppShell } from "@/components/lord/AppShell";
-import { HudPanel } from "@/components/lord/HudPanel";
-import { Loader2, Mail, Lock, User as UserIcon, Chrome } from "lucide-react";
+import {
+  Loader2,
+  Mail,
+  Lock,
+  User as UserIcon,
+  Chrome,
+  ArrowUpRight,
+  Sparkles,
+} from "lucide-react";
+import "./auth.css";
 
 type Mode = "signin" | "signup" | "forgot";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
-  head: () => ({ meta: [{ title: "LORD — Sign In" }] }),
+  head: () => ({
+    meta: [
+      { title: "LORD AI — Your Intelligence. Your Command." },
+      {
+        name: "description",
+        content:
+          "Meet your personal AI command center. Sign in to LORD AI or explore free for 10 minutes.",
+      },
+    ],
+  }),
   component: AuthPage,
 });
 
@@ -30,7 +46,7 @@ function AuthPage() {
   const navigateAfterAuth = useCallback(() => {
     if (hasNavigatedAfterAuth.current) return;
     hasNavigatedAfterAuth.current = true;
-    navigate({ to: "/chat", replace: true });
+    navigate({ to: "/", replace: true });
   }, [navigate]);
 
   useEffect(() => {
@@ -71,7 +87,7 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/chat`,
+            emailRedirectTo: `${window.location.origin}/`,
             data: { name: name.trim() || email.split("@")[0] },
           },
         });
@@ -87,7 +103,7 @@ function AuthPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: "/chat" });
+        navigate({ to: "/", replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed");
@@ -144,154 +160,184 @@ function AuthPage() {
   };
 
   const titles: Record<Mode, { h: string; sub: string; btn: string }> = {
-    signin: { h: "Access LORD", sub: "Sign in to continue.", btn: "Sign In" },
+    signin: {
+      h: "Welcome Back",
+      sub: "Sign in to continue your journey with LORD.",
+      btn: "Sign In",
+    },
     signup: { h: "Create Identity", sub: "Register a new operator.", btn: "Create Account" },
     forgot: { h: "Reset Access", sub: "We'll email you a reset link.", btn: "Send Reset Link" },
   };
   const t = titles[mode];
 
   return (
-    <AppShell>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-1 xl:flex-row xl:items-stretch">
-        <div className="relative flex min-h-[420px] flex-1 overflow-hidden rounded-[28px] border border-primary/20 bg-[radial-gradient(circle_at_top,#163b73_0%,#081827_42%,#050b16_100%)] p-6 shadow-[0_28px_80px_rgba(14,165,255,0.14)] sm:p-8 xl:p-10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_70%,rgba(14,165,255,0.18),transparent_32%),radial-gradient(circle_at_80%_20%,rgba(217,45,79,0.18),transparent_20%)]" />
-          <div className="relative z-10 flex w-full flex-col justify-between">
-            <div className="flex items-center gap-4">
-              <img
-                src="/lord-icon.png"
-                alt="LORD AI icon"
-                className="h-16 w-16 shrink-0 rounded-full object-contain ring-2 ring-primary/70 ring-offset-2 ring-offset-slate-950 shadow-[0_0_26px_rgba(14,165,255,0.55)]"
-              />
-              <div>
-                <div className="font-display text-3xl font-black tracking-[0.18em] text-white sm:text-4xl">
-                  LORD
-                </div>
-                <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.52em] text-primary/90">
-                  AI
-                </div>
-              </div>
-            </div>
+    <main className="auth-page">
+      <div className="auth-atmosphere" aria-hidden="true" />
+      <div className="auth-ribbons" aria-hidden="true">
+        <svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <linearGradient id="auth-ribbon-blue" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#173bff" stopOpacity="0" />
+              <stop offset=".38" stopColor="#087dff" stopOpacity=".9" />
+              <stop offset=".7" stopColor="#8c4dff" stopOpacity=".88" />
+              <stop offset="1" stopColor="#d78aff" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="auth-ribbon-core" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0" stopColor="#13a9ff" stopOpacity="0" />
+              <stop offset=".52" stopColor="#8bc7ff" stopOpacity=".82" />
+              <stop offset=".76" stopColor="#e9b8ff" stopOpacity=".95" />
+              <stop offset="1" stopColor="#7745ff" stopOpacity="0" />
+            </linearGradient>
+            <filter id="auth-ribbon-blur" x="-30%" y="-80%" width="160%" height="260%">
+              <feGaussianBlur stdDeviation="24" />
+            </filter>
+          </defs>
+          <path
+            className="auth-ribbon auth-ribbon--one"
+            d="M-120 750 C 220 570, 280 980, 630 790 S 1040 420, 1720 570"
+            stroke="url(#auth-ribbon-blue)"
+            strokeWidth="78"
+            filter="url(#auth-ribbon-blur)"
+          />
+          <path
+            className="auth-ribbon auth-ribbon--two"
+            d="M-120 680 C 220 510, 310 920, 650 735 S 1070 385, 1710 500"
+            stroke="url(#auth-ribbon-blue)"
+            strokeWidth="28"
+          />
+          <path
+            className="auth-ribbon auth-ribbon--three"
+            d="M-80 620 C 260 460, 330 840, 680 690 S 1120 340, 1700 425"
+            stroke="url(#auth-ribbon-core)"
+            strokeWidth="4"
+          />
+          <path
+            className="auth-ribbon auth-ribbon--four"
+            d="M-160 830 C 190 640, 320 1080, 690 865 S 1120 510, 1750 680"
+            stroke="url(#auth-ribbon-blue)"
+            strokeWidth="3"
+          />
+        </svg>
+      </div>
 
-            <div className="max-w-md">
-              <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.28em] text-blue-200/80">
-                Personal command center
-              </p>
-              <h1 className="font-display text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
-                {t.h}
-              </h1>
-              <p className="mt-4 text-base text-slate-300">{t.sub}</p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_18px_rgba(14,165,255,0.85)]" />
-              <span className="font-mono text-[10px] uppercase tracking-[0.34em] text-slate-300">
-                System online
-              </span>
-            </div>
+      <header className="auth-nav-wrap">
+        <nav className="auth-nav" aria-label="Main navigation">
+          <a className="auth-brand" href="#top" aria-label="LORD AI home">
+            <img src="/lord-icon.png" alt="" />
+            <span>
+              LORD<span className="auth-brand-ai">AI</span>
+            </span>
+          </a>
+          <div className="auth-nav-links">
+            <a href="#experience">Experience</a>
+            <a href="#intelligence">Intelligence</a>
+            <button
+              type="button"
+              className="auth-nav-demo"
+              onClick={startGuestAccess}
+              disabled={busy}
+              aria-busy={busy}
+            >
+              {busy ? "Starting…" : "Demo"}
+            </button>
           </div>
-        </div>
+        </nav>
+      </header>
 
-        <div className="mx-auto w-full max-w-md px-1 xl:mx-0 xl:flex xl:items-center">
-          <div className="w-full">
-            <h2 className="mb-1 font-display text-2xl tracking-wide text-white sm:text-3xl">
-              {t.h}
-            </h2>
-            <p className="mb-6 text-sm text-muted-foreground">{t.sub}</p>
+      <section className="auth-hero" id="top">
+        <div className="auth-composition" id="experience">
+          <div className="auth-copy-column">
+            <div className="auth-heading" id="intelligence">
+              <span className="auth-eyebrow">
+                <Sparkles size={13} /> PERSONAL AI ASSISTANT
+              </span>
+              <h1>
+                <span>Your Intelligence.</span>
+                <strong>Your Command.</strong>
+              </h1>
+              <p>Work smarter. Think deeper. Achieve more with LORD.</p>
+            </div>
 
-            <HudPanel title={t.btn}>
-              <button
-                type="button"
-                onClick={startGuestAccess}
-                disabled={busy}
-                className="mb-4 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_18px_36px_rgba(14,165,255,0.28)] transition hover:bg-primary/90 disabled:opacity-60"
-              >
-                {busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Try LORD AI — Free for 10 Minutes"
-                )}
-              </button>
+            <section className="auth-card" id="access" aria-labelledby="auth-card-title">
+              <div className="auth-card-topline">
+                <span className="auth-card-signal" />
+                <span>SECURE ACCESS</span>
+                <span className="auth-card-encrypted">ENCRYPTED</span>
+              </div>
+              <div className="auth-card-heading">
+                <h2 id="auth-card-title">{t.h}</h2>
+                <p>{t.sub}</p>
+              </div>
 
-              <form onSubmit={submit} className="space-y-3">
-                {mode === "signin" && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={signInWithGoogle}
-                      disabled={busy}
-                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-border/60 bg-background/50 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary hover:bg-primary/10 disabled:opacity-60"
-                    >
-                      {busy ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Chrome className="h-4 w-4 text-primary" />
-                      )}
-                      Continue with Google
-                    </button>
-                    <div className="flex items-center gap-3 py-1">
-                      <span className="h-px flex-1 bg-border/60" />
-                      <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                        or
-                      </span>
-                      <span className="h-px flex-1 bg-border/60" />
-                    </div>
-                  </>
-                )}
+              {mode === "signin" && (
+                <button
+                  type="button"
+                  onClick={signInWithGoogle}
+                  disabled={busy}
+                  className="auth-google-button"
+                >
+                  {busy ? <Loader2 size={17} className="animate-spin" /> : <Chrome size={17} />}
+                  Continue with Google
+                </button>
+              )}
+              {mode === "signin" && (
+                <div className="auth-divider">
+                  <span /> or continue with email <span />
+                </div>
+              )}
+
+              <form onSubmit={submit} className="auth-form">
                 {mode === "signup" && (
                   <Field icon={UserIcon} label="Name">
                     <input
+                      autoComplete="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Your name"
-                      className="w-full bg-transparent text-base outline-none sm:text-sm"
                     />
                   </Field>
                 )}
-                <Field icon={Mail} label="Email">
+                <Field icon={Mail} label="Email address">
                   <input
+                    autoComplete="email"
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@domain.com"
-                    className="w-full bg-transparent text-base outline-none sm:text-sm"
+                    placeholder="you@example.com"
                   />
                 </Field>
                 {mode !== "forgot" && (
                   <Field icon={Lock} label="Password">
                     <input
+                      autoComplete={mode === "signup" ? "new-password" : "current-password"}
                       type="password"
                       required
                       minLength={6}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-transparent text-base outline-none sm:text-sm"
+                      placeholder="At least 6 characters"
                     />
                   </Field>
                 )}
 
                 {error && (
-                  <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <p className="auth-feedback auth-feedback-error" role="alert">
                     {error}
                   </p>
                 )}
                 {info && (
-                  <p className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs text-primary">
+                  <p className="auth-feedback auth-feedback-info" role="status">
                     {info}
                   </p>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_0_18px_var(--hud)] transition hover:scale-[1.01] disabled:opacity-60"
-                >
-                  {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                <button type="submit" disabled={busy} className="auth-submit">
+                  {busy && <Loader2 size={16} className="animate-spin" />}
                   {t.btn}
+                  <ArrowUpRight size={16} />
                 </button>
-
-                <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="auth-form-links">
                   {mode === "signin" ? (
                     <>
                       <button
@@ -301,7 +347,6 @@ function AuthPage() {
                           setError(null);
                           setInfo(null);
                         }}
-                        className="text-muted-foreground hover:text-primary"
                       >
                         Forgot password?
                       </button>
@@ -312,9 +357,8 @@ function AuthPage() {
                           setError(null);
                           setInfo(null);
                         }}
-                        className="text-muted-foreground hover:text-primary"
                       >
-                        Create account →
+                        Create account <span>↗</span>
                       </button>
                     </>
                   ) : (
@@ -325,24 +369,86 @@ function AuthPage() {
                         setError(null);
                         setInfo(null);
                       }}
-                      className="text-muted-foreground hover:text-primary"
                     >
                       ← Back to sign in
                     </button>
                   )}
                 </div>
               </form>
-            </HudPanel>
 
-            <div className="mt-4 text-center">
-              <Link to="/" className="text-xs text-muted-foreground hover:text-primary">
-                ← Back to home
-              </Link>
-            </div>
+              <p className="auth-card-privacy">
+                By continuing, you agree to use LORD thoughtfully.{" "}
+                <span>Your conversations stay yours.</span>
+              </p>
+            </section>
           </div>
+          <aside className="auth-logo-stage" aria-label="LORD AI holographic emblem">
+            <div className="auth-hologram-composition">
+              <div className="auth-logo-aura" aria-hidden="true" />
+              <svg
+                className="auth-logo-orbits"
+                viewBox="0 0 700 700"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <ellipse cx="350" cy="350" rx="330" ry="285" />
+                <ellipse cx="350" cy="350" rx="290" ry="320" />
+                <circle cx="93" cy="286" r="3" />
+                <circle cx="594" cy="383" r="2.5" />
+                <circle cx="475" cy="94" r="2" />
+              </svg>
+              <div className="auth-holo-beams" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </div>
+              <div className="auth-holo-particles" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+              </div>
+              <div className="auth-hero-logo">
+                <picture>
+                  <source srcSet="/lord-logo-hologram.webp" type="image/webp" />
+                  <img
+                    src="/lord-logo-hologram.png"
+                    alt="LORD AI"
+                    width="788"
+                    height="899"
+                    decoding="async"
+                    loading="eager"
+                    fetchPriority="high"
+                  />
+                </picture>
+                <span className="auth-logo-scan" aria-hidden="true" />
+              </div>
+              <div className="auth-projector" aria-hidden="true">
+                <div className="auth-projector-rings">
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </div>
+                <div className="auth-projector-deck" />
+                <div className="auth-projector-core" />
+              </div>
+              <div className="auth-logo-caption" aria-hidden="true">
+                <span /> PERSONAL INTELLIGENCE <span />
+              </div>
+            </div>
+          </aside>
         </div>
-      </div>
-    </AppShell>
+        <footer className="auth-footer">
+          <span>© {new Date().getFullYear()} LORD AI</span>
+          <span>BUILT FOR WHAT’S NEXT</span>
+        </footer>
+      </section>
+    </main>
   );
 }
 
@@ -356,12 +462,10 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-        {label}
-      </span>
-      <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2 focus-within:border-primary">
-        <Icon className="h-4 w-4 text-muted-foreground" />
+    <label className="auth-field">
+      <span className="auth-field-label">{label}</span>
+      <div className="auth-field-control">
+        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
         {children}
       </div>
     </label>

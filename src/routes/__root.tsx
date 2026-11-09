@@ -260,7 +260,7 @@ function RootComponent() {
     void import("../lib/native-oauth")
       .then(({ registerNativeOAuthCallbacks }) =>
         registerNativeOAuthCallbacks(() => {
-          void router.navigate({ to: "/chat", replace: true });
+          void router.navigate({ to: "/", replace: true });
         }),
       )
       .then((remove) => {

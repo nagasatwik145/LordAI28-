@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -20,6 +20,8 @@ import { HudPanel } from "@/components/lord/HudPanel";
 import { MotionReveal } from "@/components/lord/MotionReveal";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { supabase } from "@/integrations/supabase/client";
+import { Route as AuthRoute } from "./auth";
 import { LastSynced } from "@/components/lord/dashboard/shared";
 import {
   LORDStatusPanel,
@@ -36,19 +38,46 @@ const EnergyOrb = lazy(() =>
 );
 
 export const Route = createFileRoute("/")({
+  ssr: false,
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) return;
+
+    const guestResponse = await fetch("/api/guest/session", {
+      credentials: "same-origin",
+      cache: "no-store",
+    }).catch(() => null);
+    if (!guestResponse?.ok) return;
+
+    const guest = (await guestResponse.json().catch(() => null)) as {
+      guest?: boolean;
+      active?: boolean;
+    } | null;
+    if (guest?.guest && guest.active) {
+      throw redirect({ to: "/chat", replace: true });
+    }
+  },
   head: () => ({
     meta: [
-      { title: "LORD AI— Command Center" },
+      { title: "LORD AI — Your Intelligence. Your Command." },
       {
         name: "description",
-        content: "Intelligence Beyond Assistance. Your personal AI.",
+        content:
+          "Meet your personal AI command center. Sign in to LORD AI or explore free for 10 minutes.",
       },
       { property: "og:title", content: "LORD AI" },
       { property: "og:description", content: "Intelligence Beyond Assistance." },
     ],
   }),
-  component: Command,
+  component: HomeRoute,
 });
+
+function HomeRoute() {
+  const { user, loading } = useCurrentUser();
+  if (loading) return <div className="min-h-screen bg-[#030307]" aria-busy="true" />;
+  const AuthLandingPage = AuthRoute.options.component;
+  return user ? <Command /> : AuthLandingPage ? <AuthLandingPage /> : null;
+}
 
 const QUICK_ACTIONS = [
   { to: "/chat", label: "Chat", icon: MessageSquare, hint: "Talk to LORD" },

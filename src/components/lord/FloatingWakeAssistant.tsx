@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowUpRight, Mic, MicOff, Pause, Radio, VolumeX, X } from "lucide-react";
 import { useWakeWord } from "./WakeWordProvider";
 
@@ -39,9 +39,12 @@ export function FloatingWakeAssistant() {
   } = useWakeWord();
   const location = useLocation();
   const navigate = useNavigate();
+  const inAuthenticatedWorkspace = useRouterState({
+    select: (state) => state.matches.some((match) => match.routeId === "/_authenticated"),
+  });
   const [expanded, setExpanded] = useState(false);
 
-  if (location.pathname === "/voice") return null;
+  if (!inAuthenticatedWorkspace || location.pathname === "/voice") return null;
 
   const active = enabled || state === "speaking" || state === "processing";
   const microphoneLive = enabled && ["wake_listening", "command_listening"].includes(state);
