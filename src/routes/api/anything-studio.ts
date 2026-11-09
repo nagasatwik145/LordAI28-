@@ -179,8 +179,7 @@ async function loadBundle(db: Db, projectId: string, userId: string) {
   const staleGenerationCutoff = Date.now() - 5 * 60_000;
   const abandoned = (artifacts ?? []).filter(
     (artifact) =>
-      artifact.status === "generating" &&
-      Date.parse(artifact.updated_at) < staleGenerationCutoff,
+      artifact.status === "generating" && Date.parse(artifact.updated_at) < staleGenerationCutoff,
   );
   if (abandoned.length) {
     const { error: recoveryError } = await db
@@ -444,7 +443,11 @@ async function generateArtifact(
 
   if (artifact.status === "generating") {
     return {
-      error: responseError(409, "GENERATION_IN_PROGRESS", "This deliverable is already generating."),
+      error: responseError(
+        409,
+        "GENERATION_IN_PROGRESS",
+        "This deliverable is already generating.",
+      ),
     };
   }
   const { data: claimed, error: generatingError } = await db
@@ -459,7 +462,11 @@ async function generateArtifact(
   if (generatingError) throw generatingError;
   if (!claimed) {
     return {
-      error: responseError(409, "GENERATION_IN_PROGRESS", "This deliverable changed. Refresh and retry."),
+      error: responseError(
+        409,
+        "GENERATION_IN_PROGRESS",
+        "This deliverable changed. Refresh and retry.",
+      ),
     };
   }
   await touchStudioProject(db, projectId, userId);
@@ -664,7 +671,11 @@ export const Route = createFileRoute("/api/anything-studio")({
             const artifact = bundle.artifacts.find((item) => item.id === studioInput.artifactId);
             if (!artifact) return responseError(404, "NOT_FOUND", "Deliverable not found.");
             if (artifact.status === "generating") {
-              return responseError(409, "GENERATION_IN_PROGRESS", "Wait for generation to finish before editing.");
+              return responseError(
+                409,
+                "GENERATION_IN_PROGRESS",
+                "Wait for generation to finish before editing.",
+              );
             }
             const kind = artifact.kind as StudioDeliverableType;
             if (kind === "image") {

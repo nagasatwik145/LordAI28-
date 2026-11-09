@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 import { createGameZip } from "./game-export";
-import { createGameHtml, gameTypeOf, getRendererName, GameSpecSchema, type GameSpec, type LegacyGameSpec } from "./game-runtime";
+import {
+  createGameHtml,
+  gameTypeOf,
+  getRendererName,
+  GameSpecSchema,
+  type GameSpec,
+  type LegacyGameSpec,
+} from "./game-runtime";
 
 const common = {
   schemaVersion: 2 as const,
@@ -19,18 +26,46 @@ const common = {
   seed: 17,
 };
 const specs: GameSpec[] = [
-  { ...common, gameType: "runner", mechanics: { obstacleDensity: 1, collectibleDensity: 1, jumpHeight: 1, finishDistance: 160 } },
-  { ...common, gameType: "rally", mechanics: { fuelCapacity: 100, fuelDrain: .4, rockDensity: 1, fuelPickupRate: 1, finishDistance: 160 } },
-  { ...common, gameType: "platformer", mechanics: { platformCount: 8, hazardCount: 3, collectibleCount: 5 } },
-  { ...common, gameType: "shooter", mechanics: { fireRate: .3, enemyDensity: 1, playerSpeed: 4, targetKills: 12 } },
-  { ...common, gameType: "puzzle", mechanics: { gridSize: 6, colorCount: 4, matchLength: 3, targetMatches: 6 } },
+  {
+    ...common,
+    gameType: "runner",
+    mechanics: { obstacleDensity: 1, collectibleDensity: 1, jumpHeight: 1, finishDistance: 160 },
+  },
+  {
+    ...common,
+    gameType: "rally",
+    mechanics: {
+      fuelCapacity: 100,
+      fuelDrain: 0.4,
+      rockDensity: 1,
+      fuelPickupRate: 1,
+      finishDistance: 160,
+    },
+  },
+  {
+    ...common,
+    gameType: "platformer",
+    mechanics: { platformCount: 8, hazardCount: 3, collectibleCount: 5 },
+  },
+  {
+    ...common,
+    gameType: "shooter",
+    mechanics: { fireRate: 0.3, enemyDensity: 1, playerSpeed: 4, targetKills: 12 },
+  },
+  {
+    ...common,
+    gameType: "puzzle",
+    mechanics: { gridSize: 6, colorCount: 4, matchLength: 3, targetMatches: 6 },
+  },
 ];
 
 describe("genre-specific deterministic game runtime", () => {
   it("validates each supported mechanics schema and rejects unsupported types/configurations", () => {
     for (const spec of specs) expect(GameSpecSchema.safeParse(spec).success).toBe(true);
     expect(GameSpecSchema.safeParse({ ...specs[0], gameType: "unsupported" }).success).toBe(false);
-    expect(GameSpecSchema.safeParse({ ...specs[1], mechanics: { fuelCapacity: 400 } }).success).toBe(false);
+    expect(
+      GameSpecSchema.safeParse({ ...specs[1], mechanics: { fuelCapacity: 400 } }).success,
+    ).toBe(false);
   });
 
   it("dispatches previews to five separate gameplay engines with their mechanic inputs", () => {
@@ -66,8 +101,15 @@ describe("genre-specific deterministic game runtime", () => {
 
   it("keeps legacy saved games playable as their historical runner type", async () => {
     const old: LegacyGameSpec = {
-      schemaVersion: 1, title: "Old Runner", description: "Original saved game", genre: "dodge",
-      theme: "old city", difficulty: "easy", objective: "Avoid obstacles", controls: ["Space"], seed: 9,
+      schemaVersion: 1,
+      title: "Old Runner",
+      description: "Original saved game",
+      genre: "dodge",
+      theme: "old city",
+      difficulty: "easy",
+      objective: "Avoid obstacles",
+      controls: ["Space"],
+      seed: 9,
     };
     expect(gameTypeOf(old)).toBe("runner");
     expect(createGameHtml(old)).toContain("tickRunner");

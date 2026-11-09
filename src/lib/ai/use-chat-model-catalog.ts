@@ -8,10 +8,11 @@ export interface ChatModelCatalogResponse {
   models: ChatModelCatalogItem[];
 }
 
-export function useChatModelCatalog() {
+export function useChatModelCatalog({ enabled = true }: { enabled?: boolean } = {}) {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["chat-model-catalog"],
+    enabled,
     queryFn: async (): Promise<ChatModelCatalogResponse> => {
       const response = await authenticatedFetch("/api/models");
       if (!response.ok) throw new Error("Could not load configured AI models.");

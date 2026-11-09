@@ -13,6 +13,7 @@ import { useEffect, type ReactNode, useRef, useState } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { WakeWordProvider } from "../components/lord/WakeWordProvider";
+import { FloatingWakeAssistant } from "../components/lord/FloatingWakeAssistant";
 import { AppContextProvider } from "../components/lord/AppContextProvider";
 import { CalendarProvider } from "../components/lord/CalendarProvider";
 import { setupApiInterceptor } from "../lib/api-interceptor";
@@ -295,6 +296,7 @@ function RootComponent() {
       <AppContextProvider>
         <CalendarProvider>
           <UserSettingsHydrator>
+            <FloatingWakeAssistant />
             <ConnectivityNotice />
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />

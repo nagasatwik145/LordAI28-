@@ -122,6 +122,27 @@ function AuthPage() {
     }
   };
 
+  const startGuestAccess = async () => {
+    setError(null);
+    setInfo(null);
+    setBusy(true);
+    try {
+      const response = await fetch("/api/guest/session", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const payload = (await response.json().catch(() => null)) as { active?: boolean } | null;
+      if (!response.ok || !payload?.active) {
+        throw new Error("Guest access could not be started.");
+      }
+      navigate({ to: "/chat", replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Guest access failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const titles: Record<Mode, { h: string; sub: string; btn: string }> = {
     signin: { h: "Access LORD", sub: "Sign in to continue.", btn: "Sign In" },
     signup: { h: "Create Identity", sub: "Register a new operator.", btn: "Create Account" },
@@ -178,6 +199,19 @@ function AuthPage() {
             <p className="mb-6 text-sm text-muted-foreground">{t.sub}</p>
 
             <HudPanel title={t.btn}>
+              <button
+                type="button"
+                onClick={startGuestAccess}
+                disabled={busy}
+                className="mb-4 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_18px_36px_rgba(14,165,255,0.28)] transition hover:bg-primary/90 disabled:opacity-60"
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Try LORD AI — Free for 10 Minutes"
+                )}
+              </button>
+
               <form onSubmit={submit} className="space-y-3">
                 {mode === "signin" && (
                   <>

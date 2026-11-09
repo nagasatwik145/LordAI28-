@@ -23,6 +23,7 @@ export const sharesQueryKey = (userId: string) => ["shares", userId] as const;
 export function useShares(userId: string) {
   return useQuery({
     queryKey: sharesQueryKey(userId),
+    enabled: Boolean(userId),
     queryFn: async (): Promise<ShareRecord[]> => {
       const res = await authenticatedFetch(`${API_BASE}/api/shares`);
       if (!res.ok) throw new Error("Failed to load shares");

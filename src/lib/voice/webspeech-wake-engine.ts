@@ -12,6 +12,7 @@ export interface SpeechRecognitionLike {
   start: () => void;
   stop: () => void;
   abort: () => void;
+  onstart?: (() => void) | null;
   onresult: ((event: { results: ArrayLike<SpeechResultLike> }) => void) | null;
   onend: (() => void) | null;
   onerror: ((event: { error?: string }) => void) | null;

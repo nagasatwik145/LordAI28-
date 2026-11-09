@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   MessageSquare,
   Network,
-  Mic2,
   Sparkles,
   Settings,
   Scale,
@@ -31,7 +30,6 @@ export const APP_NAVIGATION = [
   { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/mind-graph", label: "Mind Graph", icon: Network },
   { to: "/what-if", label: "What-If Lab", icon: Scale },
-  { to: "/voice", label: "Voice Assistant", icon: Mic2 },
   { to: "/study", label: "Study", icon: GraduationCap },
   { to: "/create-apka-jalwa", label: "LORD WorldForge", icon: Gamepad2 },
   { to: "/community", label: "Community", icon: Users },
@@ -46,7 +44,7 @@ export const APP_NAVIGATION = [
 ] as const;
 
 export const PRIMARY_NAVIGATION = APP_NAVIGATION.filter(({ to }) =>
-  ["/", "/chat", "/voice", "/study"].includes(to),
+  ["/", "/chat", "/study"].includes(to),
 );
 
 export const SECONDARY_NAVIGATION = APP_NAVIGATION.filter(

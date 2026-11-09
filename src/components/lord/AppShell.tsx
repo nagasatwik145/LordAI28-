@@ -7,12 +7,11 @@ import type { User } from "@supabase/supabase-js";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { ParticleField } from "./ParticleField";
-import { WakeIndicator } from "./WakeIndicator";
-import { FloatingWakeAssistant } from "./FloatingWakeAssistant";
 import { HealthHud } from "./HealthHud";
 import { NavigationDock } from "./NavigationDock";
 import { PRIMARY_NAVIGATION, SECONDARY_NAVIGATION } from "./app-navigation";
 import { AppCommandPalette } from "@/features/command-palette/app-command-palette";
+import { isAuthorizedHealthCenterUser } from "@/lib/health-center-access";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -22,7 +21,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const reduceMotion = useReducedMotion();
 
   const [user, setUser] = useState<User | null>(null);
+  const [guestAccessActive, setGuestAccessActive] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const canAccessHealthCenter = isAuthorizedHealthCenterUser(user);
+  const visibleSecondaryNavigation = SECONDARY_NAVIGATION.filter(
+    ({ to }) => !guestAccessActive && (to !== "/observability" || canAccessHealthCenter),
+  );
 
   useEffect(() => {
     let savedTheme: string | null = null;
@@ -71,6 +75,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (user) {
         await ensureUserDefaults(user);
       }
+      try {
+        const response = await fetch("/api/guest/session", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          active?: boolean;
+          guest?: boolean;
+        } | null;
+        if (mounted) {
+          setGuestAccessActive(Boolean(!user && payload?.guest && payload?.active));
+        }
+      } catch {
+        if (mounted) setGuestAccessActive(false);
+      }
     };
 
     initializeSession();
@@ -82,6 +101,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (user) {
         void ensureUserDefaults(user);
       }
+      void fetch("/api/guest/session", {
+        credentials: "same-origin",
+        cache: "no-store",
+      })
+        .then(async (response) => {
+          const payload = (await response.json().catch(() => null)) as {
+            active?: boolean;
+            guest?: boolean;
+          } | null;
+          if (mounted) setGuestAccessActive(Boolean(!user && payload?.guest && payload?.active));
+        })
+        .catch(() => {
+          if (mounted) setGuestAccessActive(false);
+        });
     });
 
     return () => {
@@ -129,9 +162,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <div className="truncate font-display text-lg font-bold tracking-[0.18em] text-white">
                   LORD
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.42em] text-primary/90">
-                  AI
-                </div>
+                <div className="text-[10px] uppercase tracking-[0.42em] text-primary/90">AI</div>
               </div>
             </Link>
           </div>
@@ -179,7 +210,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
             <HealthHud compact />
             <ul className="grid gap-2">
-              {SECONDARY_NAVIGATION.map(({ to, label, icon: Icon }) => {
+              {visibleSecondaryNavigation.map(({ to, label, icon: Icon }) => {
                 const active = to === "/" ? path === "/" : path.startsWith(to);
                 return (
                   <li key={to}>
@@ -206,7 +237,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Bottom nav (mobile) */}
       <nav className="mobile-safe-bottom fixed bottom-0 left-0 right-0 z-40 px-2 pb-2 md:hidden">
-        <ul className="glass-panel grid grid-cols-4 gap-1.5 p-2">
+        <ul
+          className="glass-panel grid gap-1.5 p-2"
+          style={{ gridTemplateColumns: `repeat(${PRIMARY_NAVIGATION.length}, minmax(0, 1fr))` }}
+        >
           {PRIMARY_NAVIGATION.map(({ to, label, icon: Icon }) => {
             const active = to === "/" ? path === "/" : path.startsWith(to);
             return (
@@ -228,9 +262,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </ul>
       </nav>
-
-      <WakeIndicator />
-      <FloatingWakeAssistant />
     </div>
   );
 }

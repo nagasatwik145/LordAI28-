@@ -9,12 +9,49 @@ import {
 } from "./webspeech-wake-engine";
 
 export type VoicePipelineStatus =
-  "command_listening" | "processing" | "speaking" | "wake_listening" | "review" | "error";
+  | "requesting_permission"
+  | "command_listening"
+  | "processing"
+  | "speaking"
+  | "wake_listening"
+  | "paused"
+  | "review"
+  | "error";
 
 export interface VoiceMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+}
+
+export type VoiceControlCommand =
+  "pause" | "resume" | "repeat" | "slower" | "stop-speaking" | "end";
+
+function parseVoiceControlCommand(transcript: string): VoiceControlCommand | null {
+  const normalized = transcript
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/^hey[\s,!.?;:\u2014\u2013-]+lord[\s,!.?;:\u2014\u2013-]*/, "")
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ");
+  switch (normalized) {
+    case "pause listening":
+      return "pause";
+    case "resume listening":
+      return "resume";
+    case "repeat that":
+      return "repeat";
+    case "speak slower":
+      return "slower";
+    case "stop speaking":
+      return "stop-speaking";
+    case "bye lord":
+    case "stop voice":
+    case "turn off voice":
+      return "end";
+    default:
+      return null;
+  }
 }
 
 function splitSpeechText(text: string, maxLength = 1200): string[] {
@@ -92,11 +129,16 @@ function logVoiceEvent(event: string, details: Record<string, unknown> = {}) {
 
 export class VoicePipeline {
   private recognition: SpeechRecognitionLike | null = null;
+  private continuousSession = false;
+  private sessionPaused = false;
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private restartAttempts = 0;
   private abortController: AbortController | null = null;
   private processing = false;
   private messages: VoiceMessage[] = [];
   private conversationId: string | null = null;
   private mode: LordMode;
+  private pageContext = "LORD AI";
   private autoSpeak: boolean;
   private voiceRate: number;
   private interimTranscript = "";
@@ -104,6 +146,9 @@ export class VoicePipeline {
   private failedUserSaved = false;
   private speechStoppedByUser = false;
   private speaking = false;
+  private activeAudio: HTMLAudioElement | null = null;
+  private activeAudioUrl: string | null = null;
+  private ttsAbortController: AbortController | null = null;
   private cancelled = false;
   private requestGeneration = 0;
   private speechGeneration = 0;
@@ -120,6 +165,25 @@ export class VoicePipeline {
   onMessagesChange: (messages: VoiceMessage[]) => void = () => {};
   onConversationChange: (conversationId: string | null) => void = () => {};
   onCommand: ((text: string) => boolean) | null = null;
+  onControlCommand: ((command: VoiceControlCommand) => void) | null = null;
+
+  setPageContext(page: string) {
+    this.pageContext = page.slice(0, 120);
+  }
+
+  repeatLastResponse() {
+    const answer = [...this.messages].reverse().find((message) => message.role === "assistant");
+    if (!answer) return false;
+    void this.speak(answer.text).then((started) => {
+      if (started) this.onStatusChange("speaking");
+    });
+    return true;
+  }
+
+  speakSlower() {
+    this.voiceRate = Math.max(0.65, Math.round((this.voiceRate - 0.15) * 100) / 100);
+    return this.voiceRate;
+  }
 
   constructor(mode: LordMode = "balanced", autoSpeak = true, voiceRate = 1) {
     this.mode = mode;
@@ -132,6 +196,59 @@ export class VoicePipeline {
     if (!enabled) this.stopSpeaking();
   }
 
+  startConversation() {
+    this.sessionPaused = false;
+    this.continuousSession = true;
+    this.restartAttempts = 0;
+    return this.startListening();
+  }
+
+  pauseConversation() {
+    this.continuousSession = false;
+    this.sessionPaused = true;
+    if (this.restartTimer) clearTimeout(this.restartTimer);
+    this.restartTimer = null;
+    this.stopListening();
+    this.stopSpeaking();
+    this.onStatusChange("paused");
+  }
+
+  resumeConversation() {
+    this.sessionPaused = false;
+    this.continuousSession = true;
+    this.restartAttempts = 0;
+    if (this.processing || this.speaking) return true;
+    return this.startListening();
+  }
+
+  private resumeAfterTurn() {
+    if (!this.continuousSession || this.cancelled || this.processing || this.speaking) return;
+    if (this.restartTimer) clearTimeout(this.restartTimer);
+    this.onStatusChange("wake_listening");
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null;
+      if (!this.continuousSession || this.cancelled) return;
+      if (!this.startListening()) this.scheduleRecognitionRetry();
+    }, 250);
+  }
+
+  private scheduleRecognitionRetry() {
+    if (!this.continuousSession || this.cancelled || this.restartTimer) return;
+    if (this.restartAttempts >= 3) {
+      this.continuousSession = false;
+      this.onError("Speech recognition stopped repeatedly. Restart voice or use text chat.");
+      this.onStatusChange("error");
+      return;
+    }
+    const delay = 400 * 2 ** this.restartAttempts++;
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null;
+      if (this.continuousSession && !this.cancelled && !this.processing) {
+        if (!this.startListening()) this.scheduleRecognitionRetry();
+      }
+    }, delay);
+  }
+
   startListening() {
     if (this.processing) return false;
     if (this.recognition) return false;
@@ -139,6 +256,7 @@ export class VoicePipeline {
     this.stopSpeaking();
     const Recognition = getSpeechRecognitionConstructor();
     if (!Recognition) {
+      this.continuousSession = false;
       logVoiceEvent("recognition_unavailable");
       this.onError(
         "Speech recognition is not supported in this browser. Use the text command box.",
@@ -154,6 +272,9 @@ export class VoicePipeline {
     recognition.interimResults = true;
     let finalHandled = false;
     this.interimTranscript = "";
+    recognition.onstart = () => {
+      if (this.recognition === recognition) this.onStatusChange("command_listening");
+    };
     recognition.onresult = (event) => {
       if (this.recognition !== recognition || finalHandled) return;
       const transcript = Array.from(event.results)
@@ -161,7 +282,10 @@ export class VoicePipeline {
         .join(" ")
         .trim();
       this.interimTranscript = transcript;
-      if (transcript) this.onTranscript(transcript);
+      if (transcript) {
+        this.restartAttempts = 0;
+        this.onTranscript(transcript);
+      }
       const finalTranscript = Array.from(event.results)
         .filter((result) => result.isFinal)
         .map((result) => result[0]?.transcript ?? "")
@@ -171,6 +295,16 @@ export class VoicePipeline {
         finalHandled = true;
         logVoiceEvent("transcript_captured", { characters: finalTranscript.length });
         this.stopListening();
+        if (finalTranscript.trim().length < 2) {
+          this.onTranscript("");
+          this.resumeAfterTurn();
+          return;
+        }
+        const controlCommand = parseVoiceControlCommand(finalTranscript);
+        if (controlCommand) {
+          this.onControlCommand?.(controlCommand);
+          return;
+        }
         if (this.onCommand?.(finalTranscript)) {
           this.onStatusChange("review");
           return;
@@ -179,20 +313,40 @@ export class VoicePipeline {
       } else if (Array.from(event.results).some((result) => result.isFinal) && !finalHandled) {
         finalHandled = true;
         this.stopListening();
-        this.onError(
-          "I couldn't make out any words. Tap to talk and try again, or type your command.",
-        );
-        this.onStatusChange("error");
+        if (this.continuousSession) {
+          this.onTranscript("");
+          this.resumeAfterTurn();
+        } else {
+          this.onError(
+            "I couldn't make out any words. Tap to talk and try again, or type your command.",
+          );
+          this.onStatusChange("error");
+        }
       }
     };
     recognition.onerror = (event) => {
       if (this.recognition !== recognition) return;
       if (event.error === "aborted") return;
       logVoiceEvent("recognition_error", { code: event.error ?? "unknown" });
-      if (event.error === "no-speech") {
+      if (event.error === "no-speech" || event.error === "network") {
         this.detachRecognition(recognition, true);
-        this.onError("I didn't hear any speech. Tap to talk and try again, or type your command.");
-        this.onStatusChange("error");
+        if (this.continuousSession) {
+          if (event.error === "network") {
+            this.onError(
+              "Speech recognition lost its connection to the speech service. Reconnecting…",
+            );
+          }
+          this.onStatusChange("wake_listening");
+          this.scheduleRecognitionRetry();
+        } else {
+          this.onError(
+            event.error === "network"
+              ? "Speech recognition could not reach its speech service. Check your connection and retry, or use text chat."
+              : "I didn't hear any speech. Tap to talk and try again, or type your command.",
+          );
+          this.continuousSession = false;
+          this.onStatusChange("error");
+        }
         return;
       }
       this.detachRecognition(recognition, true);
@@ -206,28 +360,44 @@ export class VoicePipeline {
               : `Speech recognition was interrupted (${event.error ?? "unknown error"}). Tap the microphone to retry.`,
       );
       this.onStatusChange("error");
+      this.continuousSession = false;
     };
     recognition.onend = () => {
       if (this.recognition !== recognition) return;
       this.detachRecognition(recognition);
-      if (!finalHandled && !this.processing) this.onStatusChange("wake_listening");
+      if (!finalHandled && !this.processing) {
+        if (this.continuousSession) this.scheduleRecognitionRetry();
+        else this.onStatusChange("wake_listening");
+      }
     };
     this.recognition = recognition;
     try {
+      this.onStatusChange("requesting_permission");
       recognition.start();
       logVoiceEvent("recognition_started");
-      this.onStatusChange("command_listening");
       return true;
-    } catch {
+    } catch (error) {
       logVoiceEvent("recognition_start_failed");
       this.recognition = null;
-      this.onError("Speech recognition could not start. Use the text command box or retry.");
+      this.continuousSession = false;
+      this.onError(
+        error instanceof DOMException && error.name === "NotAllowedError"
+          ? "Microphone permission was denied. Allow microphone access, then retry voice."
+          : error instanceof DOMException && error.name === "NotFoundError"
+            ? "No microphone is available. Connect one or use text chat."
+            : "Speech recognition could not start. Use the text command box or retry.",
+      );
       this.onStatusChange("error");
       return false;
     }
   }
 
   async submitText(text: string) {
+    const controlCommand = parseVoiceControlCommand(text);
+    if (controlCommand) {
+      this.onControlCommand?.(controlCommand);
+      return;
+    }
     if (this.onCommand?.(text)) {
       this.onTranscript(text.trim());
       this.onStatusChange("review");
@@ -383,9 +553,19 @@ export class VoicePipeline {
     }
 
     try {
-      const { id: conversationId, userId } = await this.ensureConversation(text);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw new Error("Could not verify your sign-in. Please retry.");
+      let authenticatedUser: { id: string } | null = null;
+      if (sessionData.session) {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) throw new Error("Could not verify your sign-in. Please retry.");
+        authenticatedUser = authData.user;
+      }
+      const conversation = authenticatedUser ? await this.ensureConversation(text) : null;
+      const conversationId = conversation?.id ?? null;
+      const userId = conversation?.userId ?? null;
       if (generation !== this.requestGeneration) return;
-      if (!this.failedUserSaved) {
+      if (authenticatedUser && conversationId && userId && !this.failedUserSaved) {
         const { error } = await supabase.from("messages").insert({
           id: userMessage.id,
           conversation_id: conversationId,
@@ -414,6 +594,7 @@ export class VoicePipeline {
           parts: [{ type: "text", text: message.text }],
         })),
         mode: this.mode,
+        context: { page: this.pageContext, responseStyle: "concise" as const },
       };
       const abortController = new AbortController();
       this.abortController = abortController;
@@ -461,34 +642,42 @@ export class VoicePipeline {
       this.messages.push(assistantMessage);
       this.onMessagesChange([...this.messages]);
 
-      const { error: saveError } = await supabase.from("messages").insert({
-        id: assistantMessage.id,
-        conversation_id: conversationId,
-        user_id: userId,
-        role: "assistant",
-        content: answer,
-        model: this.mode,
-      });
-      if (generation !== this.requestGeneration) return;
-      if (saveError) {
-        failureStage = "assistant_message";
-        this.pendingAssistantSave = { message: assistantMessage, conversationId, userId };
-        throw Object.assign(new Error(describeFailure(saveError, "assistant_message")), {
-          cause: saveError,
-          voiceStage: "assistant_message",
+      if (conversationId && userId) {
+        const { error: saveError } = await supabase.from("messages").insert({
+          id: assistantMessage.id,
+          conversation_id: conversationId,
+          user_id: userId,
+          role: "assistant",
+          content: answer,
+          model: this.mode,
         });
+        if (generation !== this.requestGeneration) return;
+        if (saveError) {
+          failureStage = "assistant_message";
+          this.pendingAssistantSave = { message: assistantMessage, conversationId, userId };
+          throw Object.assign(new Error(describeFailure(saveError, "assistant_message")), {
+            cause: saveError,
+            voiceStage: "assistant_message",
+          });
+        }
+        await supabase
+          .from("conversations")
+          .update({ last_message_at: new Date().toISOString() })
+          .eq("id", conversationId);
       }
-      await supabase
-        .from("conversations")
-        .update({ last_message_at: new Date().toISOString() })
-        .eq("id", conversationId);
 
       this.failedUserMessage = null;
       this.failedUserSaved = false;
       this.pendingAssistantSave = null;
       this.processing = false;
-      if (this.autoSpeak && this.speak(answer)) this.onStatusChange("speaking");
-      else this.onStatusChange("wake_listening");
+      if (this.sessionPaused) {
+        this.onStatusChange("paused");
+        return;
+      }
+      const startedPlayback = this.autoSpeak ? await this.speak(answer) : false;
+      if (generation !== this.requestGeneration) return;
+      if (startedPlayback) this.onStatusChange("speaking");
+      else this.resumeAfterTurn();
     } catch (error) {
       if (generation !== this.requestGeneration) return;
       this.processing = false;
@@ -511,12 +700,62 @@ export class VoicePipeline {
       });
       this.onError(message);
       this.onStatusChange("error");
+      this.resumeAfterTurn();
     }
   }
 
-  private speak(text: string): boolean {
-    if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) {
+  private async speak(text: string): Promise<boolean> {
+    if (typeof window === "undefined" || !text) return false;
+    const playbackGeneration = this.speechGeneration;
+    const controller = new AbortController();
+    this.ttsAbortController = controller;
+    try {
+      const response = await authenticatedFetch(`${getApiBaseUrl()}/api/voice/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, speed: this.voiceRate }),
+        signal: controller.signal,
+      });
+      if (playbackGeneration !== this.speechGeneration) return false;
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        if (playbackGeneration !== this.speechGeneration) return false;
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        this.activeAudio = audio;
+        this.activeAudioUrl = audioUrl;
+        audio.preload = "auto";
+        audio.onended = () => {
+          if (this.activeAudio !== audio) return;
+          this.activeAudio = null;
+          if (this.activeAudioUrl) URL.revokeObjectURL(this.activeAudioUrl);
+          this.activeAudioUrl = null;
+          this.speaking = false;
+          this.resumeAfterTurn();
+        };
+        audio.onerror = () => {
+          if (this.activeAudio !== audio) return;
+          this.activeAudio = null;
+          if (this.activeAudioUrl) URL.revokeObjectURL(this.activeAudioUrl);
+          this.activeAudioUrl = null;
+          this.speaking = false;
+          logVoiceEvent("tts_playback_failed");
+          this.onError("Speech playback stopped. The text response is still available.");
+          this.resumeAfterTurn();
+        };
+        await audio.play();
+        this.speaking = true;
+        logVoiceEvent("tts_playback_started", { provider: "fish-audio" });
+        return true;
+      }
+      logVoiceEvent("tts_unavailable", { status: response.status });
+    } catch {
+      if (playbackGeneration !== this.speechGeneration) return false;
       logVoiceEvent("tts_unavailable");
+    } finally {
+      if (this.ttsAbortController === controller) this.ttsAbortController = null;
+    }
+    if (!("speechSynthesis" in window)) {
       this.onError("Spoken replies are unavailable here. LORD's text response is still available.");
       return false;
     }
@@ -531,7 +770,7 @@ export class VoicePipeline {
         const part = chunks[index++]?.trim();
         if (!part) {
           this.speaking = false;
-          this.onStatusChange("wake_listening");
+          this.resumeAfterTurn();
           return;
         }
         const utterance = new SpeechSynthesisUtterance(part);
@@ -553,13 +792,13 @@ export class VoicePipeline {
           if (this.speechStoppedByUser) {
             this.speechStoppedByUser = false;
             this.speaking = false;
-            this.onStatusChange("wake_listening");
+            this.resumeAfterTurn();
             return;
           }
           this.speaking = false;
           logVoiceEvent("tts_playback_failed");
           this.onError("Speech playback stopped. The text response is still available.");
-          this.onStatusChange("wake_listening");
+          this.resumeAfterTurn();
         };
         window.speechSynthesis.speak(utterance);
       };
@@ -583,6 +822,7 @@ export class VoicePipeline {
     recognition.onresult = null;
     recognition.onerror = null;
     recognition.onend = null;
+    recognition.onstart = null;
     try {
       if (abort) recognition.abort();
     } catch {
@@ -592,21 +832,51 @@ export class VoicePipeline {
 
   stopSpeaking() {
     this.speechGeneration += 1;
+    this.ttsAbortController?.abort();
+    this.ttsAbortController = null;
+    const audio = this.activeAudio;
+    this.activeAudio = null;
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.currentTime = 0;
+      this.speaking = false;
+      if (this.activeAudioUrl) URL.revokeObjectURL(this.activeAudioUrl);
+      this.activeAudioUrl = null;
+      this.resumeAfterTurn();
+    }
     if (this.speaking && typeof window !== "undefined" && "speechSynthesis" in window) {
       this.speechStoppedByUser = true;
       this.speaking = false;
       window.speechSynthesis.cancel();
-      if (!this.recognition && !this.processing) this.onStatusChange("wake_listening");
+      if (!this.recognition && !this.processing) this.resumeAfterTurn();
     }
   }
 
   stop() {
+    this.continuousSession = false;
+    this.sessionPaused = false;
+    if (this.restartTimer) clearTimeout(this.restartTimer);
+    this.restartTimer = null;
     this.cancelled = true;
     this.requestGeneration += 1;
     this.speechGeneration += 1;
+    this.ttsAbortController?.abort();
+    this.ttsAbortController = null;
     this.stopListening();
     this.speechStoppedByUser = true;
     this.speaking = false;
+    const audio = this.activeAudio;
+    this.activeAudio = null;
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.currentTime = 0;
+      if (this.activeAudioUrl) URL.revokeObjectURL(this.activeAudioUrl);
+      this.activeAudioUrl = null;
+    }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }

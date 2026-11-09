@@ -1,7 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Supabase schema is added by this migration and generated database types are maintained separately. */
 import { createFileRoute } from "@tanstack/react-router";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
-import { upgradeLegacyGameSpec, validateGameSpec, type GeneratedGameSpec, type GameSpec, type StoredGameSpec } from "@/lib/games/game-runtime";
+import {
+  upgradeLegacyGameSpec,
+  validateGameSpec,
+  type GeneratedGameSpec,
+  type GameSpec,
+  type StoredGameSpec,
+} from "@/lib/games/game-runtime";
 import {
   createGameRecord,
   filterGamesForEntitlement,
@@ -108,10 +114,21 @@ export const Route = createFileRoute("/api/games")({
             await updateGameGeneration(db, userId, game.id, { status: "generating" });
             let spec: GeneratedGameSpec;
             try {
-              spec = await generateGameSpec(op.prompt, op.difficulty, undefined, undefined, op.dimension, request.signal);
+              spec = await generateGameSpec(
+                op.prompt,
+                op.difficulty,
+                undefined,
+                undefined,
+                op.dimension,
+                request.signal,
+              );
             } catch (error) {
               const failure = generationFailure(error);
-              await recordProductEvent(userId, { event: "game_generation_failed", feature: "games", category: "provider" }).catch(() => undefined);
+              await recordProductEvent(userId, {
+                event: "game_generation_failed",
+                feature: "games",
+                category: "provider",
+              }).catch(() => undefined);
               console.error("[games] upstream generation failed", {
                 requestId,
                 gameId,
@@ -146,20 +163,31 @@ export const Route = createFileRoute("/api/games")({
               status: "ready",
               spec,
             });
-            await recordProductEvent(userId, { event: "game_generation_succeeded", feature: "games" }).catch(() => undefined);
+            await recordProductEvent(userId, {
+              event: "game_generation_succeeded",
+              feature: "games",
+            }).catch(() => undefined);
             return Response.json({ game: readyGame });
           }
           if (op.action === "modify") {
             if (!validateGameSpec(op.spec))
               return Response.json({ error: "Invalid game specification." }, { status: 400 });
-            const existing = op.spec.schemaVersion === 1
-              ? upgradeLegacyGameSpec(op.spec)
-              : op.spec as GeneratedGameSpec;
+            const existing =
+              op.spec.schemaVersion === 1
+                ? upgradeLegacyGameSpec(op.spec)
+                : (op.spec as GeneratedGameSpec);
             if (requiresGameProAccess({ spec: existing })) {
               const denied = await requirePro();
               if (denied) return denied;
             }
-            const spec = await generateGameSpec("", existing.difficulty, existing, op.instruction, undefined, request.signal);
+            const spec = await generateGameSpec(
+              "",
+              existing.difficulty,
+              existing,
+              op.instruction,
+              undefined,
+              request.signal,
+            );
             if (requiresGameProAccess({ spec })) {
               const denied = await requirePro();
               if (denied) return denied;
@@ -175,7 +203,11 @@ export const Route = createFileRoute("/api/games")({
               .limit(50);
             if (error) throw error;
             const games = data ?? [];
-            if (games.some((game: { spec: unknown; versions: unknown[] }) => requiresGameProAccess(game))) {
+            if (
+              games.some((game: { spec: unknown; versions: unknown[] }) =>
+                requiresGameProAccess(game),
+              )
+            ) {
               const access = await checkPro();
               if (access instanceof Response) return access;
               return Response.json({ games: filterGamesForEntitlement(games, access) });
@@ -259,7 +291,9 @@ export const Route = createFileRoute("/api/games")({
               unsupported: "GAME_TYPE_UNSUPPORTED",
             } as const;
             return Response.json(
-              { error: { code: codeByKind[error.kind], message: error.message, requestId, gameId } },
+              {
+                error: { code: codeByKind[error.kind], message: error.message, requestId, gameId },
+              },
               {
                 status: statusByKind[error.kind],
                 headers: error.kind === "rate_limited" ? { "Retry-After": "30" } : undefined,
@@ -280,18 +314,20 @@ export const Route = createFileRoute("/api/games")({
           return Response.json(
             {
               error: {
-                code: classifiedFailure?.kind === "not_configured"
-                  ? "AI_NOT_CONFIGURED"
-                  : classifiedFailure?.kind === "rate_limited"
-                    ? "AI_RATE_LIMITED"
-                    : classifiedFailure?.kind === "timeout"
-                      ? "AI_TIMEOUT"
-                      : classifiedFailure?.kind === "model_unavailable"
-                        ? "AI_MODEL_UNAVAILABLE"
-                  : isGenerationAction
-                          ? "AI_GENERATION_FAILED"
-                          : "DB_ERROR",
-                message: classifiedFailure?.message ??
+                code:
+                  classifiedFailure?.kind === "not_configured"
+                    ? "AI_NOT_CONFIGURED"
+                    : classifiedFailure?.kind === "rate_limited"
+                      ? "AI_RATE_LIMITED"
+                      : classifiedFailure?.kind === "timeout"
+                        ? "AI_TIMEOUT"
+                        : classifiedFailure?.kind === "model_unavailable"
+                          ? "AI_MODEL_UNAVAILABLE"
+                          : isGenerationAction
+                            ? "AI_GENERATION_FAILED"
+                            : "DB_ERROR",
+                message:
+                  classifiedFailure?.message ??
                   (isGenerationAction
                     ? "Game generation failed. Please try again."
                     : "The game could not be saved or loaded. Please try again."),
@@ -309,7 +345,8 @@ export const Route = createFileRoute("/api/games")({
                       ? 504
                       : 503
                 : 500,
-              headers: classifiedFailure?.kind === "rate_limited" ? { "Retry-After": "30" } : undefined,
+              headers:
+                classifiedFailure?.kind === "rate_limited" ? { "Retry-After": "30" } : undefined,
             },
           );
         }

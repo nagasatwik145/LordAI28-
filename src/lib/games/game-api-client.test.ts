@@ -67,7 +67,12 @@ describe("duplicate generation submissions", () => {
   it("runs only one concurrent task", async () => {
     const gate = new SingleFlightGate();
     let finish!: (value: string) => void;
-    const task = vi.fn(() => new Promise<string>((resolve) => { finish = resolve; }));
+    const task = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    );
     const first = gate.run(task);
     const duplicate = gate.run(task);
     expect(first).not.toBeNull();

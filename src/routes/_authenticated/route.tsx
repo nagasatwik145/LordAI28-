@@ -7,14 +7,38 @@ import { onDashboardEvent } from "@/lib/dashboard-service";
 import { toast } from "sonner";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
+const GUEST_ALLOWED_PATHS = new Set(["/chat", "/voice"]);
+
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const { data } = await supabase.auth.getSession();
-    if (!data.session?.user) {
-      throw redirect({ to: "/auth" });
+    if (data.session?.user) {
+      return { user: data.session.user, guest: false };
     }
-    return { user: data.session.user };
+
+    const guestStatusResponse = await fetch("/api/guest/session", {
+      credentials: "same-origin",
+      cache: "no-store",
+    }).catch(() => null);
+
+    if (guestStatusResponse && guestStatusResponse.ok) {
+      const guestPayload = (await guestStatusResponse.json().catch(() => null)) as {
+        active?: boolean;
+        guest?: boolean;
+      } | null;
+      const isGuestAllowed =
+        Boolean(guestPayload?.guest && guestPayload.active) &&
+        GUEST_ALLOWED_PATHS.has(location.pathname);
+      if (isGuestAllowed) {
+        return { user: null, guest: true };
+      }
+      if (guestPayload?.guest && guestPayload.active) {
+        throw redirect({ to: "/chat", search: { authRequired: "true" } });
+      }
+    }
+
+    throw redirect({ to: "/auth" });
   },
   component: AuthenticatedLayout,
 });
@@ -34,9 +58,24 @@ function AuthenticatedLayout() {
   tasksRef.current = tasks;
 
   useEffect(() => {
-    const feature = pathname.startsWith("/study") ? "study" : pathname.startsWith("/chat") ? "chat" : pathname.startsWith("/games") ? "games" : pathname.startsWith("/voice") ? "missions" : pathname.startsWith("/images") ? "images" : "workspace";
-    void authenticatedFetch("/api/analytics/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "feature_opened", feature }) }).catch(() => undefined);
-  }, [pathname]);
+    if (!user?.id) return;
+    const feature = pathname.startsWith("/study")
+      ? "study"
+      : pathname.startsWith("/chat")
+        ? "chat"
+        : pathname.startsWith("/games")
+          ? "games"
+          : pathname.startsWith("/voice")
+            ? "missions"
+            : pathname.startsWith("/images")
+              ? "images"
+              : "workspace";
+    void authenticatedFetch("/api/analytics/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "feature_opened", feature }),
+    }).catch(() => undefined);
+  }, [pathname, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;

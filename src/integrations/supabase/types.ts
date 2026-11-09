@@ -81,6 +81,195 @@ export type Database = {
         };
         Relationships: [];
       };
+      ai_games: {
+        Row: {
+          created_at: string;
+          id: string;
+          prompt: string;
+          spec: Json;
+          updated_at: string;
+          user_id: string;
+          versions: Json;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          prompt: string;
+          spec: Json;
+          updated_at?: string;
+          user_id: string;
+          versions?: Json;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          prompt?: string;
+          spec?: Json;
+          updated_at?: string;
+          user_id?: string;
+          versions?: Json;
+        };
+        Relationships: [];
+      };
+      lord_community_bookmarks: {
+        Row: {
+          creation_id: string;
+          created_at: string;
+          user_id: string;
+        };
+        Insert: {
+          creation_id: string;
+          created_at?: string;
+          user_id: string;
+        };
+        Update: {
+          creation_id?: string;
+          created_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lord_community_bookmarks_creation_id_fkey";
+            columns: ["creation_id"];
+            isOneToOne: false;
+            referencedRelation: "lord_community_creations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      lord_community_creations: {
+        Row: {
+          category: string;
+          created_at: string;
+          creator_id: string;
+          creator_name: string;
+          creator_slug: string;
+          description: string;
+          helpful_count: number;
+          id: string;
+          moderation_status: string;
+          public_spec: Json;
+          published_at: string | null;
+          slug: string;
+          source_id: string;
+          source_type: string;
+          status: string;
+          tags: string[];
+          title: string;
+          updated_at: string;
+          version: string;
+        };
+        Insert: {
+          category: string;
+          created_at?: string;
+          creator_id: string;
+          creator_name: string;
+          creator_slug: string;
+          description: string;
+          helpful_count?: number;
+          id?: string;
+          moderation_status?: string;
+          public_spec: Json;
+          published_at?: string | null;
+          slug: string;
+          source_id: string;
+          source_type: string;
+          status?: string;
+          tags?: string[];
+          title: string;
+          updated_at?: string;
+          version?: string;
+        };
+        Update: {
+          category?: string;
+          created_at?: string;
+          creator_id?: string;
+          creator_name?: string;
+          creator_slug?: string;
+          description?: string;
+          helpful_count?: number;
+          id?: string;
+          moderation_status?: string;
+          public_spec?: Json;
+          published_at?: string | null;
+          slug?: string;
+          source_id?: string;
+          source_type?: string;
+          status?: string;
+          tags?: string[];
+          title?: string;
+          updated_at?: string;
+          version?: string;
+        };
+        Relationships: [];
+      };
+      lord_community_reports: {
+        Row: {
+          created_at: string;
+          creation_id: string | null;
+          details: string;
+          id: string;
+          reason: string;
+          reported_user_id: string | null;
+          reporter_id: string;
+          status: string;
+        };
+        Insert: {
+          created_at?: string;
+          creation_id?: string | null;
+          details?: string;
+          id?: string;
+          reason: string;
+          reported_user_id?: string | null;
+          reporter_id: string;
+          status?: string;
+        };
+        Update: {
+          created_at?: string;
+          creation_id?: string | null;
+          details?: string;
+          id?: string;
+          reason?: string;
+          reported_user_id?: string | null;
+          reporter_id?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lord_community_reports_creation_id_fkey";
+            columns: ["creation_id"];
+            isOneToOne: false;
+            referencedRelation: "lord_community_creations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      lord_community_votes: {
+        Row: {
+          creation_id: string;
+          created_at: string;
+          user_id: string;
+        };
+        Insert: {
+          creation_id: string;
+          created_at?: string;
+          user_id: string;
+        };
+        Update: {
+          creation_id?: string;
+          created_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lord_community_votes_creation_id_fkey";
+            columns: ["creation_id"];
+            isOneToOne: false;
+            referencedRelation: "lord_community_creations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       lord_what_if_scenarios: {
         Row: {
           created_at: string;

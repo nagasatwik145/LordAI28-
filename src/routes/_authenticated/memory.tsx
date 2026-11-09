@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -61,6 +61,7 @@ function MemoryPage() {
   const qc = useQueryClient();
   const navigate = Route.useNavigate();
   const { user } = Route.useRouteContext();
+  if (!user) throw redirect({ to: "/auth", replace: true });
 
   const { data: memories = [], isLoading, error } = useMemories(user.id);
   const { data: settings } = useMemorySettings(user.id);

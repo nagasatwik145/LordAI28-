@@ -4,6 +4,7 @@ import { monitoring } from "@/lib/monitoring-service";
 import { DEFAULT_MODEL_ID, MODEL_REGISTRY } from "@/lib/ai/models";
 import { DEFAULT_MODE } from "@/lib/modes";
 import { getApiBaseUrl } from "@/lib/api-config";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
 export type DashboardEventKind =
   | "system"
@@ -441,7 +442,9 @@ export async function fetchAI(): Promise<DashboardAI> {
   let availableModelIds = new Set<string>();
   try {
     const base = getApiBaseUrl();
-    const response = await fetch(`${base}/api/openrouter-test`, { cache: "no-store" });
+    const response = await authenticatedFetch(`${base}/api/openrouter-test`, {
+      cache: "no-store",
+    });
     const result: unknown = await response.json();
     if (result && typeof result === "object") {
       const value = result as { status?: unknown; modelIds?: unknown };

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, ChevronDown, Cpu, Crown, Eye, Lock, RefreshCw, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LORD_MODES, type LordMode } from "@/lib/modes";
-import { CHAT_MODEL_CATALOG } from "@/lib/ai/chat-model-catalog";
+import { CHAT_MODEL_CATALOG, FREE_CHAT_MODEL_IDS } from "@/lib/ai/chat-model-catalog";
 import { useChatModelCatalog } from "@/lib/ai/use-chat-model-catalog";
 
 interface ModeSelectorProps {
@@ -90,22 +90,35 @@ export function ModeSelector({ value, onChange }: ModeSelectorProps) {
 interface ModelSelectorProps {
   value: string;
   onChange: (value: string) => void;
+  enabled?: boolean;
 }
 
-export function ModelSelector({ value, onChange }: ModelSelectorProps) {
+export function ModelSelector({ value, onChange, enabled = true }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const catalogQuery = useChatModelCatalog();
+  const catalogQuery = useChatModelCatalog({ enabled });
   const models =
     catalogQuery.data?.models ??
-    CHAT_MODEL_CATALOG.map((model) => ({
-      ...model,
-      available: false,
-      providerStatus: catalogQuery.isPending ? ("checking" as const) : ("unavailable" as const),
-      unavailableReason: catalogQuery.isPending
-        ? "Checking provider availability…"
-        : "Availability could not be loaded. Retry the check.",
-    }));
+    CHAT_MODEL_CATALOG.map((model) => {
+      const isGuestFreeModel =
+        !enabled && FREE_CHAT_MODEL_IDS.some((freeModelId) => freeModelId === model.id);
+      return {
+        ...model,
+        available: isGuestFreeModel,
+        providerStatus: isGuestFreeModel
+          ? ("available" as const)
+          : catalogQuery.isPending && enabled
+            ? ("checking" as const)
+            : ("unavailable" as const),
+        unavailableReason: isGuestFreeModel
+          ? undefined
+          : !enabled
+            ? "Sign in to check provider availability for this model."
+            : catalogQuery.isPending
+              ? "Checking provider availability…"
+              : "Availability could not be loaded. Retry the check.",
+      };
+    });
   const isPro = catalogQuery.data?.isPro ?? false;
   const selected = models.find((model) => model.id === value) ?? models[0] ?? CHAT_MODEL_CATALOG[0];
 
@@ -155,10 +168,12 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
                 </span>
               </div>
               <p className="mt-1 text-[10px] leading-relaxed text-white/45">
-                North Mini Code and Gemma 3 27B IT are included free. Provider availability is
-                checked live.
+                North Mini Code and Gemma 3 27B IT are included free.
+                {enabled
+                  ? " Provider availability is checked live."
+                  : " Sign in to check live provider availability."}
               </p>
-              {catalogQuery.isError && (
+              {enabled && catalogQuery.isError && (
                 <button
                   type="button"
                   onClick={() => void catalogQuery.retryAvailability().catch(() => {})}
@@ -167,7 +182,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
                   <RefreshCw className="h-3 w-3" /> Retry model availability
                 </button>
               )}
-              {catalogQuery.isPending && (
+              {enabled && catalogQuery.isPending && (
                 <p className="mt-2 text-[10px] text-white/45">Checking provider access…</p>
               )}
             </div>
@@ -190,6 +205,13 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
                         : `${model.unavailableReason ?? "Unavailable"} Click to retry.`
                     }
                     onClick={() => {
+                      if (!enabled) {
+                        if (FREE_CHAT_MODEL_IDS.some((freeModelId) => freeModelId === model.id)) {
+                          onChange(model.id);
+                          setOpen(false);
+                        }
+                        return;
+                      }
                       if (!model.available) {
                         void catalogQuery.retryAvailability().catch(() => {});
                         return;

@@ -97,6 +97,7 @@ import { Route as ApiChatOcrRouteImport } from './routes/api/chat/ocr'
 import { Route as ApiCommandPaletteSearchRouteImport } from './routes/api/command-palette/search'
 import { Route as ApiDashboardsIndexRouteImport } from './routes/api/dashboards/index'
 import { Route as ApiDeveloperLabHistoryRouteImport } from './routes/api/developer-lab/history'
+import { Route as ApiGuestSessionRouteImport } from './routes/api/guest/session'
 import { Route as ApiImageHealthRouteImport } from './routes/api/image/health'
 import { Route as ApiImagesIdRouteImport } from './routes/api/images/$id'
 import { Route as ApiImagesModelsRouteImport } from './routes/api/images/models'
@@ -134,6 +135,7 @@ import { Route as ApiSharesTokenRouteImport } from './routes/api/shares/$token'
 import { Route as ApiStudyPlansIndexRouteImport } from './routes/api/study-plans/index'
 import { Route as ApiStudyPlansIdRouteImport } from './routes/api/study-plans/$id'
 import { Route as ApiVoiceMissionsRouteImport } from './routes/api/voice/missions'
+import { Route as ApiVoiceTtsRouteImport } from './routes/api/voice/tts'
 import { Route as CommunityCreatorsNameRouteImport } from './routes/community/creators/$name'
 import { Route as ApiCommunityCreatorsNameRouteImport } from './routes/api/community/creators/$name'
 import { Route as ApiCommunityPublicSlugRouteImport } from './routes/api/community/public/$slug'
@@ -617,6 +619,11 @@ const ApiDeveloperLabHistoryRoute = ApiDeveloperLabHistoryRouteImport.update({
   path: '/history',
   getParentRoute: () => ApiDeveloperLabRoute,
 } as any)
+const ApiGuestSessionRoute = ApiGuestSessionRouteImport.update({
+  id: '/api/guest/session',
+  path: '/api/guest/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiImageHealthRoute = ApiImageHealthRouteImport.update({
   id: '/api/image/health',
   path: '/api/image/health',
@@ -801,6 +808,11 @@ const ApiStudyPlansIdRoute = ApiStudyPlansIdRouteImport.update({
 const ApiVoiceMissionsRoute = ApiVoiceMissionsRouteImport.update({
   id: '/api/voice/missions',
   path: '/api/voice/missions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVoiceTtsRoute = ApiVoiceTtsRouteImport.update({
+  id: '/api/voice/tts',
+  path: '/api/voice/tts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CommunityCreatorsNameRoute = CommunityCreatorsNameRouteImport.update({
@@ -997,6 +1009,7 @@ export interface FileRoutesByFullPath {
   '/api/chat/ocr': typeof ApiChatOcrRoute
   '/api/command-palette/search': typeof ApiCommandPaletteSearchRoute
   '/api/developer-lab/history': typeof ApiDeveloperLabHistoryRoute
+  '/api/guest/session': typeof ApiGuestSessionRoute
   '/api/image/health': typeof ApiImageHealthRoute
   '/api/images/$id': typeof ApiImagesIdRoute
   '/api/images/models': typeof ApiImagesModelsRoute
@@ -1030,6 +1043,7 @@ export interface FileRoutesByFullPath {
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
+  '/api/voice/tts': typeof ApiVoiceTtsRoute
   '/community/creators/$name': typeof CommunityCreatorsNameRoute
   '/canvas/': typeof AuthenticatedCanvasIndexRoute
   '/command-center/': typeof AuthenticatedCommandCenterIndexRoute
@@ -1143,6 +1157,7 @@ export interface FileRoutesByTo {
   '/api/chat/ocr': typeof ApiChatOcrRoute
   '/api/command-palette/search': typeof ApiCommandPaletteSearchRoute
   '/api/developer-lab/history': typeof ApiDeveloperLabHistoryRoute
+  '/api/guest/session': typeof ApiGuestSessionRoute
   '/api/image/health': typeof ApiImageHealthRoute
   '/api/images/$id': typeof ApiImagesIdRoute
   '/api/images/models': typeof ApiImagesModelsRoute
@@ -1176,6 +1191,7 @@ export interface FileRoutesByTo {
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
+  '/api/voice/tts': typeof ApiVoiceTtsRoute
   '/community/creators/$name': typeof CommunityCreatorsNameRoute
   '/canvas': typeof AuthenticatedCanvasIndexRoute
   '/command-center': typeof AuthenticatedCommandCenterIndexRoute
@@ -1292,6 +1308,7 @@ export interface FileRoutesById {
   '/api/chat/ocr': typeof ApiChatOcrRoute
   '/api/command-palette/search': typeof ApiCommandPaletteSearchRoute
   '/api/developer-lab/history': typeof ApiDeveloperLabHistoryRoute
+  '/api/guest/session': typeof ApiGuestSessionRoute
   '/api/image/health': typeof ApiImageHealthRoute
   '/api/images/$id': typeof ApiImagesIdRoute
   '/api/images/models': typeof ApiImagesModelsRoute
@@ -1325,6 +1342,7 @@ export interface FileRoutesById {
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
+  '/api/voice/tts': typeof ApiVoiceTtsRoute
   '/community/creators/$name': typeof CommunityCreatorsNameRoute
   '/_authenticated/canvas/': typeof AuthenticatedCanvasIndexRoute
   '/_authenticated/command-center/': typeof AuthenticatedCommandCenterIndexRoute
@@ -1441,6 +1459,7 @@ export interface FileRouteTypes {
     | '/api/chat/ocr'
     | '/api/command-palette/search'
     | '/api/developer-lab/history'
+    | '/api/guest/session'
     | '/api/image/health'
     | '/api/images/$id'
     | '/api/images/models'
@@ -1474,6 +1493,7 @@ export interface FileRouteTypes {
     | '/api/shares/$token'
     | '/api/study-plans/$id'
     | '/api/voice/missions'
+    | '/api/voice/tts'
     | '/community/creators/$name'
     | '/canvas/'
     | '/command-center/'
@@ -1587,6 +1607,7 @@ export interface FileRouteTypes {
     | '/api/chat/ocr'
     | '/api/command-palette/search'
     | '/api/developer-lab/history'
+    | '/api/guest/session'
     | '/api/image/health'
     | '/api/images/$id'
     | '/api/images/models'
@@ -1620,6 +1641,7 @@ export interface FileRouteTypes {
     | '/api/shares/$token'
     | '/api/study-plans/$id'
     | '/api/voice/missions'
+    | '/api/voice/tts'
     | '/community/creators/$name'
     | '/canvas'
     | '/command-center'
@@ -1735,6 +1757,7 @@ export interface FileRouteTypes {
     | '/api/chat/ocr'
     | '/api/command-palette/search'
     | '/api/developer-lab/history'
+    | '/api/guest/session'
     | '/api/image/health'
     | '/api/images/$id'
     | '/api/images/models'
@@ -1768,6 +1791,7 @@ export interface FileRouteTypes {
     | '/api/shares/$token'
     | '/api/study-plans/$id'
     | '/api/voice/missions'
+    | '/api/voice/tts'
     | '/community/creators/$name'
     | '/_authenticated/canvas/'
     | '/_authenticated/command-center/'
@@ -1842,6 +1866,7 @@ export interface RootRouteChildren {
   ApiCanvasStreamRoute: typeof ApiCanvasStreamRoute
   ApiCanvasVersionsRoute: typeof ApiCanvasVersionsRoute
   ApiCommandPaletteSearchRoute: typeof ApiCommandPaletteSearchRoute
+  ApiGuestSessionRoute: typeof ApiGuestSessionRoute
   ApiImageHealthRoute: typeof ApiImageHealthRoute
   ApiKnowledgeIdRoute: typeof ApiKnowledgeIdRoute
   ApiKnowledgeUploadRoute: typeof ApiKnowledgeUploadRoute
@@ -1871,6 +1896,7 @@ export interface RootRouteChildren {
   ApiSharedTokenRoute: typeof ApiSharedTokenRoute
   ApiStudyPlansIdRoute: typeof ApiStudyPlansIdRouteWithChildren
   ApiVoiceMissionsRoute: typeof ApiVoiceMissionsRoute
+  ApiVoiceTtsRoute: typeof ApiVoiceTtsRoute
   CommunityCreatorsNameRoute: typeof CommunityCreatorsNameRoute
   ApiCanvasIndexRoute: typeof ApiCanvasIndexRoute
   ApiDashboardsIndexRoute: typeof ApiDashboardsIndexRoute
@@ -2511,6 +2537,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDeveloperLabHistoryRouteImport
       parentRoute: typeof ApiDeveloperLabRoute
     }
+    '/api/guest/session': {
+      id: '/api/guest/session'
+      path: '/api/guest/session'
+      fullPath: '/api/guest/session'
+      preLoaderRoute: typeof ApiGuestSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/image/health': {
       id: '/api/image/health'
       path: '/api/image/health'
@@ -2768,6 +2801,13 @@ declare module '@tanstack/react-router' {
       path: '/api/voice/missions'
       fullPath: '/api/voice/missions'
       preLoaderRoute: typeof ApiVoiceMissionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/voice/tts': {
+      id: '/api/voice/tts'
+      path: '/api/voice/tts'
+      fullPath: '/api/voice/tts'
+      preLoaderRoute: typeof ApiVoiceTtsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/community/creators/$name': {
@@ -3165,6 +3205,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCanvasStreamRoute: ApiCanvasStreamRoute,
   ApiCanvasVersionsRoute: ApiCanvasVersionsRoute,
   ApiCommandPaletteSearchRoute: ApiCommandPaletteSearchRoute,
+  ApiGuestSessionRoute: ApiGuestSessionRoute,
   ApiImageHealthRoute: ApiImageHealthRoute,
   ApiKnowledgeIdRoute: ApiKnowledgeIdRoute,
   ApiKnowledgeUploadRoute: ApiKnowledgeUploadRoute,
@@ -3194,6 +3235,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSharedTokenRoute: ApiSharedTokenRoute,
   ApiStudyPlansIdRoute: ApiStudyPlansIdRouteWithChildren,
   ApiVoiceMissionsRoute: ApiVoiceMissionsRoute,
+  ApiVoiceTtsRoute: ApiVoiceTtsRoute,
   CommunityCreatorsNameRoute: CommunityCreatorsNameRoute,
   ApiCanvasIndexRoute: ApiCanvasIndexRoute,
   ApiDashboardsIndexRoute: ApiDashboardsIndexRoute,

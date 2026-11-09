@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
+import { requireHealthCenterAdmin } from "@/integrations/supabase/auth-middleware";
 import { Route as healthCenterRoute } from "@/routes/api/health-center";
 import {
   checkHealthCenterRateLimit,
@@ -34,8 +34,8 @@ function snapshotOptions(
 }
 
 describe("health center status classification", () => {
-  it("registers Supabase request authentication on the diagnostics API", () => {
-    expect(healthCenterRoute.options.server?.middleware).toContain(requireSupabaseRequestAuth);
+  it("registers verified Health Center authorization on the diagnostics API", () => {
+    expect(healthCenterRoute.options.server?.middleware).toContain(requireHealthCenterAdmin);
   });
 
   it("does not count unconfigured or untested optional services as core failures", async () => {

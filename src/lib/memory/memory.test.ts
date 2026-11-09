@@ -153,10 +153,7 @@ describe("semantic retrieval", () => {
       userId: "user-1",
     });
 
-    expect(inProject.map(({ memory: item }) => item.id).sort()).toEqual([
-      "global",
-      "project-one",
-    ]);
+    expect(inProject.map(({ memory: item }) => item.id).sort()).toEqual(["global", "project-one"]);
     expect(outsideProject.map(({ memory: item }) => item.id)).toEqual(["global"]);
   });
 
@@ -182,8 +179,6 @@ describe("semantic retrieval", () => {
 
   it("recognizes repeated facts as duplicates and distinguishes corrections", () => {
     expect(arePossibleDuplicates("I prefer TypeScript", "I prefer TypeScript!")).toBe(true);
-    expect(arePossibleDuplicates("I prefer TypeScript", "I do not prefer TypeScript")).toBe(
-      false,
-    );
+    expect(arePossibleDuplicates("I prefer TypeScript", "I do not prefer TypeScript")).toBe(false);
   });
 });

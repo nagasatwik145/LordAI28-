@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
+import { requireHealthCenterAdmin } from "@/integrations/supabase/auth-middleware";
 import { checkHealthCenterRateLimit, createHealthCenterSnapshot } from "@/lib/health-center.server";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/api/health-center")({
   server: {
-    middleware: [requireSupabaseRequestAuth],
+    middleware: [requireHealthCenterAdmin],
     handlers: {
       GET: async ({ context, request }) => {
         const auth = context as {

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
@@ -107,6 +107,7 @@ function visibleForFilter(node: MindGraphNode, filter: GraphFilter): boolean {
 
 function MindGraphPage() {
   const { user } = Route.useRouteContext();
+  if (!user) throw redirect({ to: "/auth", replace: true });
   const queryClient = useQueryClient();
   const [projectId, setProjectId] = useState("all");
   const [memoryPage, setMemoryPage] = useState(0);

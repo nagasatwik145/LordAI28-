@@ -18,7 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createGameHtml, gameTypeOf, type GameSpec, type StoredGameSpec } from "@/lib/games/game-runtime";
+import {
+  createGameHtml,
+  gameTypeOf,
+  type GameSpec,
+  type StoredGameSpec,
+} from "@/lib/games/game-runtime";
 import type { GeneratedGameSpec } from "@/lib/games/game-runtime";
 import { ThreeGamePreview } from "@/lib/games/engines/3d/ThreeGamePreview";
 import { createGameZip } from "@/lib/games/game-export";
@@ -78,7 +83,10 @@ function GameStudio() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [instruction, setInstruction] = useState("");
   const generationGate = useRef(new SingleFlightGate());
-  const preview = useMemo(() => (game && game.spec.schemaVersion !== 3 ? createGameHtml(game.spec) : ""), [game]);
+  const preview = useMemo(
+    () => (game && game.spec.schemaVersion !== 3 ? createGameHtml(game.spec) : ""),
+    [game],
+  );
   useEffect(() => {
     requestGamesApi<{ games: SavedGame[] }>({ action: "list" })
       .then(({ games: savedGames }) => {
@@ -229,7 +237,7 @@ function GameStudio() {
                 <div>
                   <h2 className="font-bold text-white">What do you want to make?</h2>
                   <p className="text-sm text-slate-400">
-                  Describe the gameplay and dimension. Jalwa selects a reviewed playable engine.
+                    Describe the gameplay and dimension. Jalwa selects a reviewed playable engine.
                   </p>
                 </div>
               </div>
@@ -246,7 +254,9 @@ function GameStudio() {
               />
               <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                 <div>
-                  <Label htmlFor="dimension" className="mb-2 block text-xs text-slate-400">Game dimension</Label>
+                  <Label htmlFor="dimension" className="mb-2 block text-xs text-slate-400">
+                    Game dimension
+                  </Label>
                   <select
                     id="dimension"
                     value={dimension}
@@ -406,7 +416,8 @@ function GameStudio() {
                     Publish · coming soon
                   </Button>
                   <p className="w-full text-xs text-slate-400">
-                    Web ZIP export is supported. Android APK export is unavailable: no game-specific Android build and signing pipeline is configured.
+                    Web ZIP export is supported. Android APK export is unavailable: no game-specific
+                    Android build and signing pipeline is configured.
                   </p>
                 </div>
               )}
@@ -486,7 +497,8 @@ function GameStudio() {
                       <button onClick={() => void openGame(g.id)} className="min-w-0 text-left">
                         <b className="block truncate text-sm text-white">{g.spec.title}</b>
                         <span className="text-xs text-slate-400">
-                          {gameTypeOf(g.spec)} · Updated {new Date(g.updated_at).toLocaleDateString()}
+                          {gameTypeOf(g.spec)} · Updated{" "}
+                          {new Date(g.updated_at).toLocaleDateString()}
                         </span>
                       </button>
                       <Button

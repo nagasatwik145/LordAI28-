@@ -19,21 +19,76 @@ const base = {
 };
 
 export const GameSpecSchema = z.discriminatedUnion("gameType", [
-  z.object({ ...base, gameType: z.literal("runner"), mechanics: z.object({
-    obstacleDensity: z.number().min(0.5).max(2), collectibleDensity: z.number().min(0.2).max(2), jumpHeight: z.number().min(0.7).max(1.4), finishDistance: z.number().min(80).max(240),
-  }).strict() }).strict(),
-  z.object({ ...base, gameType: z.literal("rally"), mechanics: z.object({
-    fuelCapacity: z.number().min(50).max(200), fuelDrain: z.number().min(0.1).max(1), rockDensity: z.number().min(0.4).max(2), fuelPickupRate: z.number().min(0.3).max(2), finishDistance: z.number().min(80).max(240),
-  }).strict() }).strict(),
-  z.object({ ...base, gameType: z.literal("platformer"), mechanics: z.object({
-    platformCount: z.number().int().min(5).max(16), hazardCount: z.number().int().min(1).max(8), collectibleCount: z.number().int().min(2).max(12),
-  }).strict() }).strict(),
-  z.object({ ...base, gameType: z.literal("shooter"), mechanics: z.object({
-    fireRate: z.number().min(0.12).max(0.8), enemyDensity: z.number().min(0.3).max(2), playerSpeed: z.number().min(2).max(8), targetKills: z.number().int().min(8).max(20),
-  }).strict() }).strict(),
-  z.object({ ...base, gameType: z.literal("puzzle"), mechanics: z.object({
-    gridSize: z.number().int().min(5).max(8), colorCount: z.number().int().min(3).max(6), matchLength: z.number().int().min(3).max(4), targetMatches: z.number().int().min(3).max(12),
-  }).strict() }).strict(),
+  z
+    .object({
+      ...base,
+      gameType: z.literal("runner"),
+      mechanics: z
+        .object({
+          obstacleDensity: z.number().min(0.5).max(2),
+          collectibleDensity: z.number().min(0.2).max(2),
+          jumpHeight: z.number().min(0.7).max(1.4),
+          finishDistance: z.number().min(80).max(240),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      gameType: z.literal("rally"),
+      mechanics: z
+        .object({
+          fuelCapacity: z.number().min(50).max(200),
+          fuelDrain: z.number().min(0.1).max(1),
+          rockDensity: z.number().min(0.4).max(2),
+          fuelPickupRate: z.number().min(0.3).max(2),
+          finishDistance: z.number().min(80).max(240),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      gameType: z.literal("platformer"),
+      mechanics: z
+        .object({
+          platformCount: z.number().int().min(5).max(16),
+          hazardCount: z.number().int().min(1).max(8),
+          collectibleCount: z.number().int().min(2).max(12),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      gameType: z.literal("shooter"),
+      mechanics: z
+        .object({
+          fireRate: z.number().min(0.12).max(0.8),
+          enemyDensity: z.number().min(0.3).max(2),
+          playerSpeed: z.number().min(2).max(8),
+          targetKills: z.number().int().min(8).max(20),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      gameType: z.literal("puzzle"),
+      mechanics: z
+        .object({
+          gridSize: z.number().int().min(5).max(8),
+          colorCount: z.number().int().min(3).max(6),
+          matchLength: z.number().int().min(3).max(4),
+          targetMatches: z.number().int().min(3).max(12),
+        })
+        .strict(),
+    })
+    .strict(),
 ]);
 
 export type GameSpec = z.infer<typeof GameSpecSchema>;
@@ -57,11 +112,20 @@ export function validateGameSpec(value: unknown): value is StoredGameSpec {
   if (Game3DSpecSchema.safeParse(value).success) return true;
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
-  return v.schemaVersion === 1 && typeof v.title === "string" && v.title.length <= 80 &&
-    typeof v.description === "string" && v.description.length <= 300 &&
-    ["runner", "dodge"].includes(String(v.genre)) && typeof v.theme === "string" &&
-    ["easy", "normal", "hard"].includes(String(v.difficulty)) && typeof v.objective === "string" &&
-    Array.isArray(v.controls) && v.controls.length <= 8 && typeof v.seed === "number";
+  return (
+    v.schemaVersion === 1 &&
+    typeof v.title === "string" &&
+    v.title.length <= 80 &&
+    typeof v.description === "string" &&
+    v.description.length <= 300 &&
+    ["runner", "dodge"].includes(String(v.genre)) &&
+    typeof v.theme === "string" &&
+    ["easy", "normal", "hard"].includes(String(v.difficulty)) &&
+    typeof v.objective === "string" &&
+    Array.isArray(v.controls) &&
+    v.controls.length <= 8 &&
+    typeof v.seed === "number"
+  );
 }
 
 export function gameTypeOf(spec: StoredGameSpec): GameType {
@@ -69,7 +133,9 @@ export function gameTypeOf(spec: StoredGameSpec): GameType {
   return "runner";
 }
 
-export function getRendererName(spec: StoredGameSpec): GameType | `three-${Game3DSpec["gameType"]}` {
+export function getRendererName(
+  spec: StoredGameSpec,
+): GameType | `three-${Game3DSpec["gameType"]}` {
   return spec.schemaVersion === 3 ? `three-${spec.gameType}` : gameTypeOf(spec);
 }
 
@@ -95,7 +161,8 @@ export function upgradeLegacyGameSpec(spec: LegacyGameSpec): GameSpec {
 
 /** Fixed, reviewed runtime: the validated spec selects a distinct deterministic engine. */
 export function createGameHtml(spec: StoredGameSpec): string {
-  if (spec.schemaVersion === 3) throw new Error("Three-dimensional games must be rendered by the Three.js preview engine.");
+  if (spec.schemaVersion === 3)
+    throw new Error("Three-dimensional games must be rendered by the Three.js preview engine.");
   const data = JSON.stringify(spec).replace(/</g, "\\u003c");
   const renderer = getRendererName(spec);
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>${escapeHtml(spec.title)}</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07111f;color:#eaf8ff;font:14px system-ui}canvas{display:block;width:100%;height:100%;touch-action:none}#hud{position:absolute;inset:12px 14px auto;display:flex;justify-content:space-between;gap:12px;pointer-events:none;text-shadow:0 2px 8px #000}#message{position:absolute;inset:0;display:grid;place-items:center;text-align:center;background:#07111fcc}#message[hidden]{display:none}button{border:1px solid #29dfff;background:#092638;color:white;border-radius:12px;padding:12px 18px;font-weight:700;font-size:16px}small{opacity:.75}</style></head><body><canvas id="game"></canvas><div id="hud"><b id="name"></b><b id="meter"></b></div><div id="message"><div><h2 id="headline">Ready</h2><p id="help"></p><button id="start">Play</button><p><small id="controls"></small></p></div></div><script>const G=${data},ENGINE=${JSON.stringify(renderer)};
@@ -129,5 +196,8 @@ document.querySelector('#headline').textContent='Ready · '+G.gameType;document.
 }
 
 function escapeHtml(s: string) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  );
 }

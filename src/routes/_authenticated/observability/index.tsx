@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Capacitor } from "@capacitor/core";
 import {
   AlertTriangle,
@@ -14,8 +14,17 @@ import { Button } from "@/components/ui/button";
 import type { HealthCenterSnapshot, HealthCheck, HealthStatus } from "@/lib/health-center.types";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import { AppShell } from "@/components/lord/AppShell";
+import { supabase } from "@/integrations/supabase/client";
+import { isAuthorizedHealthCenterUser } from "@/lib/health-center-access";
 
 export const Route = createFileRoute("/_authenticated/observability/")({
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user || !isAuthorizedHealthCenterUser(user)) {
+      throw redirect({ to: "/chat", replace: true });
+    }
+  },
   component: ObservabilityLayout,
 });
 
@@ -238,7 +247,7 @@ function addClientCapabilityChecks(snapshot: HealthCenterSnapshot): HealthCenter
   const android = Capacitor.getPlatform() === "android";
   const isNative = Capacitor.isNativePlatform();
   const hasSpeechRecognition = "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
-  const hasSpeechOutput = "speechSynthesis" in window;
+  const hasSpeechOutput = typeof window !== "undefined" && typeof Audio !== "undefined";
   const hasNotificationApi = "Notification" in window;
   const localNotificationsAvailable = Capacitor.isPluginAvailable("LocalNotifications");
   const checks = snapshot.checks.map((check) => {

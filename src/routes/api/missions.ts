@@ -258,9 +258,23 @@ export const Route = createFileRoute("/api/missions")({
             }
             return json({ mission });
           }
-          const mission = await executeMissionStep(store, auth.userId, operation.missionId, identity);
-          if (mission.status === "completed") await recordProductEvent(auth.userId, { event: "mission_completed", feature: "missions" }).catch(() => undefined);
-          if (mission.status === "failed") await recordProductEvent(auth.userId, { event: "mission_failed", feature: "missions", category: "provider" }).catch(() => undefined);
+          const mission = await executeMissionStep(
+            store,
+            auth.userId,
+            operation.missionId,
+            identity,
+          );
+          if (mission.status === "completed")
+            await recordProductEvent(auth.userId, {
+              event: "mission_completed",
+              feature: "missions",
+            }).catch(() => undefined);
+          if (mission.status === "failed")
+            await recordProductEvent(auth.userId, {
+              event: "mission_failed",
+              feature: "missions",
+              category: "provider",
+            }).catch(() => undefined);
           return json({ mission });
         } catch (error) {
           return errorResponse(error);

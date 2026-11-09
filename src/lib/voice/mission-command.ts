@@ -6,7 +6,11 @@ export type VoiceMissionCommand =
   | { action: "progress" };
 
 export function parseVoiceMissionCommand(text: string): VoiceMissionCommand | null {
-  const command = text.trim().replace(/[.!?]+$/, "").replace(/\s+/g, " ").toLowerCase();
+  const command = text
+    .trim()
+    .replace(/[.!?]+$/, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
   if (/^(?:please )?(?:check|show) (?:the )?mission (?:progress|status)$/.test(command)) {
     return { action: "progress" };
   }

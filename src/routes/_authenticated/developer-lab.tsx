@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/lord/AppShell";
+import { MarkdownRenderer } from "@/components/lord/chat/markdown/MarkdownRenderer";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,6 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import {
   developerApiError,
   formatApiResponse,
-  formatDeveloperOutput,
   requiresRequestConfirmation,
   redactApiUrl,
   validateBrowserApiUrl,
@@ -240,7 +240,7 @@ function DeveloperLab() {
     if (nextAction === "debug" && !errorMessageInput.trim()) {
       setAction("debug");
       setError(
-        "Add the error message or describe the unexpected behavior. You can also include environment details.",
+        "For debugging, include the error message, stack trace, or the unexpected behavior. Environment details are helpful when the issue depends on runtime or configuration.",
       );
       return;
     }
@@ -251,7 +251,7 @@ function DeveloperLab() {
     try {
       const response = await authenticatedFetch("/api/developer-lab", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "text/plain, application/json" },
         body: JSON.stringify({
           action: nextAction,
           code,
@@ -261,11 +261,37 @@ function DeveloperLab() {
           framework: framework || undefined,
         }),
       });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(developerApiError(payload));
-      const result = formatDeveloperOutput(payload);
-      if (!result) throw new Error("LORD returned an empty analysis.");
-      setOutput(result.content);
+
+      if (!response.ok) {
+        const payload: unknown = await response.json().catch(() => null);
+        throw new Error(developerApiError(payload));
+      }
+
+      const contentType = response.headers.get("content-type") ?? "";
+      let content = "";
+      if (contentType.includes("application/json")) {
+        const payload = (await response.json().catch(() => null)) as { content?: unknown } | null;
+        content = typeof payload?.content === "string" ? payload.content.trim() : "";
+      } else if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let text = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += decoder.decode(value, { stream: true });
+          setOutput(text);
+        }
+        text += decoder.decode();
+        content = text.trim();
+        setOutput(content);
+      } else {
+        content = (await response.text()).trim();
+        setOutput(content);
+      }
+
+      if (!content) throw new Error("LORD Developer Lab returned an empty analysis.");
+
       const historyResponse = await authenticatedFetch("/api/developer-lab/history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -274,19 +300,19 @@ function DeveloperLab() {
           action: nextAction,
           language,
           code,
-          output: result.content,
+          output: content,
         }),
       });
       if (!historyResponse.ok)
         throw new Error(
-          "Analysis completed, but this session could not be saved to your account history.",
+          "The analysis completed, but this session could not be saved to your account history.",
         );
       const entry = (await historyResponse.json()) as Omit<Session, "at"> & {
         created_at: string;
       };
       setHistory((old) => [{ ...entry, at: entry.created_at }, ...old].slice(0, 100));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Analysis failed.");
+      setError(cause instanceof Error ? cause.message : "The analysis could not be completed.");
     } finally {
       setBusy(false);
     }
@@ -555,13 +581,13 @@ function DeveloperLab() {
                     </ul>
                   </Card>
                 )}
-                {busy && (
+                {busy && !output && (
                   <Card
                     role="status"
                     className="flex items-center gap-3 p-5 text-sm text-muted-foreground"
                   >
                     <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-                    Analyzing with LORD AI… code is not being executed.
+                    Reviewing your code with LORD AI. This workspace does not execute code.
                   </Card>
                 )}
                 {error && (
@@ -584,13 +610,15 @@ function DeveloperLab() {
                         </h2>
                         <p className="mt-1 flex items-center gap-1.5 text-xs text-primary">
                           <Sparkles className="h-3.5 w-3.5" />
-                          AI suggestion · No code executed
+                          AI suggestion · No code executed · Review before applying
+                          {busy ? " · Generating…" : ""}
                         </p>
                       </div>
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           variant="outline"
+                          disabled={busy || !output.trim()}
                           onClick={() => {
                             void navigator.clipboard.writeText(output);
                             setCopyDone(true);
@@ -607,6 +635,7 @@ function DeveloperLab() {
                         <Button
                           size="sm"
                           variant="outline"
+                          disabled={busy || !output.trim()}
                           onClick={() =>
                             saveBlob(`${action}-suggestion.md`, output, "text/markdown")
                           }
@@ -616,18 +645,26 @@ function DeveloperLab() {
                         </Button>
                       </div>
                     </div>
-                    <pre className="max-h-[560px] overflow-auto whitespace-pre-wrap p-5 text-sm leading-6 text-foreground">
-                      {output}
-                    </pre>
+                    <div className="max-h-[560px] overflow-auto p-5">
+                      <MarkdownRenderer
+                        streaming={busy}
+                        className="markdown-content developer-lab-output text-sm leading-6 text-foreground"
+                      >
+                        {output}
+                      </MarkdownRenderer>
+                    </div>
                   </Card>
                 )}
                 {!output && !busy && (
                   <Card className="flex min-h-36 flex-col items-center justify-center p-6 text-center">
                     <Sparkles className="mb-2 h-6 w-6 text-primary" />
-                    <h2 className="text-sm font-semibold">Choose a code action to get started</h2>
+                    <h2 className="text-sm font-semibold">
+                      Choose a code action when you are ready
+                    </h2>
                     <p className="mt-1 max-w-md text-xs text-muted-foreground">
-                      AI results are suggestions. Test, type-check, lint, build, and execution
-                      results are not run from this workspace.
+                      LORD AI can explain, debug, refactor, review, document, or generate test
+                      ideas. Results are suggestions; tests, type checks, lint, builds, and
+                      execution are not run from this workspace.
                     </p>
                   </Card>
                 )}

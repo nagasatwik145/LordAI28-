@@ -638,7 +638,13 @@ function ProjectWorkspace() {
                   onChange={(e) => setNewTaskTitle(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCreateTask()}
                 />
-                <Input aria-label="Task due date" type="date" className="sm:max-w-44" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} />
+                <Input
+                  aria-label="Task due date"
+                  type="date"
+                  className="sm:max-w-44"
+                  value={newTaskDueDate}
+                  onChange={(e) => setNewTaskDueDate(e.target.value)}
+                />
                 <Button onClick={handleCreateTask} disabled={!newTaskTitle.trim()}>
                   Add
                 </Button>
@@ -684,7 +690,11 @@ function ProjectWorkspace() {
                       >
                         {task.priority}
                       </span>
-                      {task.dueDate && <span className="text-xs text-muted-foreground">Due {new Date(task.dueDate).toLocaleDateString()}</span>}
+                      {task.dueDate && (
+                        <span className="text-xs text-muted-foreground">
+                          Due {new Date(task.dueDate).toLocaleDateString()}
+                        </span>
+                      )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

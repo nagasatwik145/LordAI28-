@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
+import { requireHealthCenterAdmin } from "@/integrations/supabase/auth-middleware";
 import type { SystemHealth } from "@/lib/phase2/types";
 
 export const Route = createFileRoute("/api/observability/health")({
   server: {
-    middleware: [requireSupabaseRequestAuth],
+    middleware: [requireHealthCenterAdmin],
     handlers: {
       GET: async () => {
         const metrics: SystemHealth = {

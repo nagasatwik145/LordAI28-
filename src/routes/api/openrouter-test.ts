@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
 import { checkOpenRouterHealth } from "@/lib/ai/openrouter-health.server";
 import { readEnvApiKey } from "@/lib/env.server";
 import { MODEL_REGISTRY } from "@/lib/ai/models";
@@ -29,6 +30,7 @@ async function getOpenRouterHealth() {
 
 export const Route = createFileRoute("/api/openrouter-test")({
   server: {
+    middleware: [requireSupabaseRequestAuth],
     handlers: {
       GET: async () =>
         Response.json(await getOpenRouterHealth(), {

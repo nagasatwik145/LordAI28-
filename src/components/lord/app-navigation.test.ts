@@ -13,14 +13,16 @@ describe("app navigation", () => {
     );
   });
 
-  it("keeps four primary destinations and exposes every other destination as secondary", () => {
-    expect(PRIMARY_NAVIGATION).toHaveLength(4);
-    expect(PRIMARY_NAVIGATION.map(({ to }) => to)).toEqual(["/", "/chat", "/voice", "/study"]);
+  it("keeps primary destinations and exposes every other destination as secondary", () => {
+    expect(PRIMARY_NAVIGATION.map(({ to }) => to)).toEqual(["/", "/chat", "/study"]);
 
     const allDestinations = [
       ...PRIMARY_NAVIGATION.map(({ to }) => to),
       ...SECONDARY_NAVIGATION.map(({ to }) => to),
     ];
     expect(new Set(allDestinations)).toEqual(new Set(APP_NAVIGATION.map(({ to }) => to)));
+    expect((APP_NAVIGATION.map(({ to }) => to) as readonly string[]).includes("/voice")).toBe(
+      false,
+    );
   });
 });

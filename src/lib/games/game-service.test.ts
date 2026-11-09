@@ -63,9 +63,9 @@ describe("Create Apka Jalwa persistence", () => {
 
   it("requires Pro for 3D game content in current specs and version history", () => {
     expect(requiresGameProAccess({ spec: { schemaVersion: 3 }, versions: [] })).toBe(true);
-    expect(requiresGameProAccess({ spec: { schemaVersion: 2 }, versions: [{ dimension: "3d" }] })).toBe(
-      true,
-    );
+    expect(
+      requiresGameProAccess({ spec: { schemaVersion: 2 }, versions: [{ dimension: "3d" }] }),
+    ).toBe(true);
     expect(requiresGameProAccess({ spec: { schemaVersion: 2 }, versions: [] })).toBe(false);
   });
 

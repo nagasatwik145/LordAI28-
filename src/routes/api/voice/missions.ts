@@ -76,11 +76,7 @@ async function executeMission(missionId: string, userId: string, signal: AbortSi
   const initial = await loadMission(missionId, userId);
   if (!initial || !["planned", "paused"].includes(initial.status)) return null;
   const expected = initial.status;
-  if (
-    !(await setMissionStatus(missionId, userId, "running", [
-      expected as "planned" | "paused",
-    ]))
-  ) {
+  if (!(await setMissionStatus(missionId, userId, "running", [expected as "planned" | "paused"]))) {
     return missionResponse(missionId, userId);
   }
 
@@ -115,9 +111,7 @@ async function executeMission(missionId: string, userId: string, signal: AbortSi
         const result = await executeVoiceMissionStep(
           current.goal,
           runningSteps[index],
-          current.steps
-            .slice(0, index)
-            .flatMap((item) => (item.result ? [item.result] : [])),
+          current.steps.slice(0, index).flatMap((item) => (item.result ? [item.result] : [])),
           stepSignal,
         );
         const latest = await loadMission(missionId, userId);
@@ -300,11 +294,7 @@ export const Route = createFileRoute("/api/voice/missions")({
           }
 
           if (parsed.data.action === "run" || parsed.data.action === "resume") {
-            const result = await executeMission(
-              mission.id,
-              auth.userId,
-              request.signal,
-            );
+            const result = await executeMission(mission.id, auth.userId, request.signal);
             if (!result) return apiErrorResponse(404, "NOT_FOUND", "Mission not found.", requestId);
             return Response.json(result, { headers: { "Cache-Control": "no-store" } });
           }

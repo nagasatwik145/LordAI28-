@@ -3,11 +3,15 @@ import { createGameHtml, gameTypeOf, type StoredGameSpec } from "./game-runtime"
 import { Game3DSpecSchema } from "./game-spec-3d";
 import { THREE_D_CONTROLS } from "./game-controls-3d";
 
-export async function createGameZip(input: StoredGameSpec, originalPrompt: string, runtimeBundle?: string): Promise<Blob> {
+export async function createGameZip(
+  input: StoredGameSpec,
+  originalPrompt: string,
+  runtimeBundle?: string,
+): Promise<Blob> {
   const spec = input.schemaVersion === 3 ? Game3DSpecSchema.parse(input) : input;
   const zip = new JSZip();
   if (spec.schemaVersion === 3) {
-    const runtime = runtimeBundle ?? await fetchThreeRuntime();
+    const runtime = runtimeBundle ?? (await fetchThreeRuntime());
     zip.file("index.html", createThreeGameHtml(spec));
     zip.file("three-runtime.js", runtime);
   } else {
@@ -15,13 +19,24 @@ export async function createGameZip(input: StoredGameSpec, originalPrompt: strin
   }
   zip.file(
     "game.json",
-    JSON.stringify({
-      ...spec,
-      engine: `LORD ${spec.schemaVersion === 3 ? "Three.js 3D" : "2D"} ${gameTypeOf(spec)}`,
-      originalPrompt,
-      testReport: { specificationValidation: "passed", automatedGameplayTest: "not_run", browserRuntimeTest: "not_run" },
-      androidApk: { status: "unavailable", reason: "No configured game-specific Android build and signing pipeline." },
-    }, null, 2),
+    JSON.stringify(
+      {
+        ...spec,
+        engine: `LORD ${spec.schemaVersion === 3 ? "Three.js 3D" : "2D"} ${gameTypeOf(spec)}`,
+        originalPrompt,
+        testReport: {
+          specificationValidation: "passed",
+          automatedGameplayTest: "not_run",
+          browserRuntimeTest: "not_run",
+        },
+        androidApk: {
+          status: "unavailable",
+          reason: "No configured game-specific Android build and signing pipeline.",
+        },
+      },
+      null,
+      2,
+    ),
   );
   zip.file(
     "README.md",
@@ -33,13 +48,20 @@ export async function createGameZip(input: StoredGameSpec, originalPrompt: strin
 async function fetchThreeRuntime() {
   if (typeof window === "undefined") throw new Error("The Three.js export runtime is unavailable.");
   const response = await fetch(new URL("/game-export/three-runtime.js", window.location.href));
-  if (!response.ok) throw new Error("Could not load the bundled Three.js export runtime. Rebuild and deploy the frontend assets.");
+  if (!response.ok)
+    throw new Error(
+      "Could not load the bundled Three.js export runtime. Rebuild and deploy the frontend assets.",
+    );
   return response.text();
 }
 
 function createThreeGameHtml(spec: Extract<StoredGameSpec, { schemaVersion: 3 }>) {
   const data = JSON.stringify(spec).replace(/</g, "\\u003c");
-  const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+  const escape = (value: string) =>
+    value.replace(
+      /[&<>"']/g,
+      (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!,
+    );
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>${escape(spec.title)}</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050b16;color:#fff;font:14px system-ui}#game{position:absolute;inset:0 0 72px}canvas{display:block;width:100%;height:100%;touch-action:none}#hud{position:absolute;top:10px;left:12px;right:12px;z-index:2;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;text-shadow:0 2px 7px #000;font-size:${12 * spec.ui.hudScale}px}#report{position:absolute;left:12px;bottom:80px;z-index:2;color:#ffffffa8;font-size:11px}#controls{position:absolute;inset:auto 10px 8px;z-index:3;display:${spec.ui.touchControls ? "flex" : "none"};justify-content:space-between;gap:8px}button{min-height:44px;min-width:48px;border:1px solid #8beaff88;border-radius:12px;background:#07182be8;color:white;font-weight:700;padding:8px 12px;touch-action:none}#error{position:absolute;inset:0;z-index:5;display:grid;align-content:center;justify-items:center;gap:14px;background:#050b16ee;padding:24px;text-align:center}#error[hidden]{display:none}</style></head><body><div id="game"></div><div id="hud"><b>${escape(spec.title)}</b><span id="status">Loading 3D scene…</span><div><button id="pause">Pause</button><button id="restart">Restart</button></div></div><div id="report">Automated gameplay test: not run</div><div id="controls"><div id="move"></div><div id="do"></div></div><div id="error" hidden><span id="errorMessage"></span><button id="retry">Retry loading</button></div><script type="application/json" id="spec">${data}</script><script type="module">
 import {mountThreeGame} from './three-runtime.js';
   const spec=JSON.parse(document.querySelector('#spec').textContent),host=document.querySelector('#game'),status=document.querySelector('#status'),error=document.querySelector('#error'),errorMessage=document.querySelector('#errorMessage');let game,paused=false,starting=false;
@@ -55,4 +77,4 @@ import {mountThreeGame} from './three-runtime.js';
   function actionForKey(code){if(code==='Space')return spec.gameType==='fighting'?'dodge':'jump';if(code==='KeyJ')return spec.gameType==='fighting'?'punch':'fire';if(code==='KeyK')return 'kick';if(code==='KeyL')return 'web';return keys[code]}
   window.addEventListener('keydown',event=>{const action=actionForKey(event.code);if(action){event.preventDefault();game?.action(action,true)}});window.addEventListener('keyup',event=>{const action=actionForKey(event.code);if(action)game?.action(action,false)});
   </script></body></html>`;
-  }
+}

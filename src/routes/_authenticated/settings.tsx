@@ -245,7 +245,7 @@ function SettingsPage() {
     queryFn: async () => {
       const response = await authenticatedFetch("/api/analytics/consent");
       if (!response.ok) throw new Error("Could not load analytics preference.");
-      return (await response.json() as { enabled: boolean }).enabled;
+      return ((await response.json()) as { enabled: boolean }).enabled;
     },
   });
 
@@ -1055,13 +1055,29 @@ function SettingsPage() {
                 <div className="flex w-full items-center justify-between gap-4 rounded-lg border border-border/50 p-4">
                   <div>
                     <p className="text-sm font-medium">Share anonymous product analytics</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Optional usage events only. LORD never records messages, notes, credentials, or API keys. Turning this off deletes your analytics events.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Optional usage events only. LORD never records messages, notes, credentials,
+                      or API keys. Turning this off deletes your analytics events.
+                    </p>
                   </div>
-                  <SettingsToggle icon={Activity} checked={analyticsConsent ?? false} label="Share anonymous product analytics" description="Opt in to minimized product usage events." onChange={async (enabled) => {
-                    const response = await authenticatedFetch("/api/analytics/consent", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) });
-                    if (!response.ok) { toast.error("Could not save analytics preference."); return; }
-                    await refetchAnalyticsConsent();
-                  }} />
+                  <SettingsToggle
+                    icon={Activity}
+                    checked={analyticsConsent ?? false}
+                    label="Share anonymous product analytics"
+                    description="Opt in to minimized product usage events."
+                    onChange={async (enabled) => {
+                      const response = await authenticatedFetch("/api/analytics/consent", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ enabled }),
+                      });
+                      if (!response.ok) {
+                        toast.error("Could not save analytics preference.");
+                        return;
+                      }
+                      await refetchAnalyticsConsent();
+                    }}
+                  />
                 </div>
                 <motion.button
                   whileHover={{ scale: 1.02 }}

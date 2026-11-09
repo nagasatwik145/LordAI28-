@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const migration = readFileSync("supabase/migrations/20261025050000_lord_community.sql", "utf8");
 const api = readFileSync("src/routes/api/community.ts", "utf8");
+const compactApi = api.replace(/\s+/g, "");
 const publicApi = readFileSync("src/routes/api/community/public/$slug.ts", "utf8");
 
 describe("LORD Community security contract", () => {
@@ -12,7 +13,7 @@ describe("LORD Community security contract", () => {
     expect(api).toContain('.eq("creator_id", userId)');
   });
   it("validates selected source games and their structured format before publishing", () => {
-    expect(api).toContain('.eq("user_id", userId).maybeSingle()');
+    expect(compactApi).toContain('.eq("user_id",userId).maybeSingle()');
     expect(api).toContain("!validateGameSpec(game.spec)");
   });
   it("prevents creators from moderating their own items and gates moderator actions", () => {
@@ -35,7 +36,7 @@ describe("LORD Community security contract", () => {
     expect(publicApi).toContain('"Cache-Control": "public, max-age=60');
   });
   it("checks ownership before editing, unpublishing, or deleting a creation", () => {
-    expect(api).toContain('.eq("id", input.id).eq("creator_id", userId)');
+    expect(compactApi).toContain('.eq("id",input.id).eq("creator_id",userId)');
     expect(api).toContain('input.action === "unpublish"');
     expect(api).toContain('input.action === "delete"');
   });
@@ -45,6 +46,6 @@ describe("LORD Community security contract", () => {
   });
   it("requires authenticated request middleware for privileged community actions", () => {
     expect(api).toContain("middleware: [requireSupabaseRequestAuth]");
-    expect(api).toContain('if (!parsed.success)');
+    expect(api).toContain("if (!parsed.success)");
   });
 });

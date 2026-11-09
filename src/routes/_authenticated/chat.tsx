@@ -30,6 +30,7 @@ import type { ConversationWithFolder } from "@/lib/folders";
 import { RichMessage } from "@/components/lord/RichMessage";
 import { TypingDots } from "@/components/lord/TypingDots";
 import { ChatInput } from "@/components/lord/chat/input/ChatInput";
+import { ProblemSolvingSelector } from "@/components/lord/ProblemSolvingSelector";
 import { ModeSelector, ModelSelector } from "@/components/lord/chat/input/ModelSelector";
 import { FREE_CHAT_MODEL_IDS } from "@/lib/ai/chat-model-catalog";
 import { isUnsafeAssistantError, safeChatErrorMessage } from "@/lib/ai/safe-chat-error";
@@ -105,6 +106,10 @@ import {
   useSaveDetectedMemory,
   type DetectedMemory,
 } from "@/lib/memory";
+import {
+  detectProblemSolvingIntent,
+  type ProblemSolvingPreference,
+} from "@/lib/problem-solving-intent";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   head: () => ({
@@ -114,6 +119,7 @@ export const Route = createFileRoute("/_authenticated/chat")({
     .object({
       conversationId: z.string().uuid().optional(),
       projectId: z.string().uuid().optional(),
+      authRequired: z.union([z.boolean(), z.string()]).optional(),
     })
     .catch({}),
   component: ChatPage,
@@ -162,6 +168,13 @@ function isOptimisticId(id: string): boolean {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function formatGuestRemaining(expiresAt: number): string {
+  const seconds = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+  return `${Math.floor(seconds / 60)
+    .toString()
+    .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")} remaining`;
 }
 
 const fileDataUrlCache = new WeakMap<File, Promise<string>>();
@@ -343,13 +356,52 @@ function isDefaultTitle(title: string | undefined | null): boolean {
 }
 
 function ChatPage() {
-  const { conversationId: requestedConversationId, projectId: requestedProjectId } =
-    Route.useSearch();
+  const routeContext = Route.useRouteContext();
+  const {
+    conversationId: requestedConversationId,
+    projectId: requestedProjectId,
+    authRequired,
+  } = Route.useSearch();
   const qc = useQueryClient();
-  const modelCatalogQuery = useChatModelCatalog();
-  const { user } = Route.useRouteContext();
+  const { user } = routeContext;
+  const isAuthenticatedUser = Boolean(user);
+  const modelCatalogQuery = useChatModelCatalog({ enabled: isAuthenticatedUser });
   const { metrics, currentRoute, activeWorkflow, history } = useAppContext();
   const calendar = useCalendar();
+  const userId = user?.id ?? "";
+  const showGuestAccessDenied = authRequired === true || authRequired === "true";
+  const guestSessionQuery = useQuery({
+    queryKey: ["guest-session"],
+    enabled: !user && Boolean(routeContext.guest),
+    queryFn: async () => {
+      const response = await fetch("/api/guest/session", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        active?: boolean;
+        expiresAt?: number;
+      } | null;
+      return response.ok && payload?.active ? payload : null;
+    },
+    staleTime: 0,
+  });
+  const [guestClockNow, setGuestClockNow] = useState(() => Date.now());
+  useEffect(() => {
+    const expiresAt = guestSessionQuery.data?.expiresAt;
+    if (user || !routeContext.guest || !expiresAt) return;
+    const updateClock = () => setGuestClockNow(Date.now());
+    updateClock();
+    const timer = window.setInterval(updateClock, 1000);
+    return () => window.clearInterval(timer);
+  }, [guestSessionQuery.data?.expiresAt, routeContext.guest, user]);
+  const guestExpired =
+    !user &&
+    Boolean(routeContext.guest) &&
+    (guestSessionQuery.data === null ||
+      Boolean(
+        guestSessionQuery.data?.expiresAt && guestClockNow >= guestSessionQuery.data.expiresAt,
+      ));
 
   const [mode, setMode] = usePersistedState<LordMode>("chat-mode", DEFAULT_MODE);
   const [modelId, setModelId] = usePersistedState<string>("chat-model-id", FREE_CHAT_MODEL_IDS[0]);
@@ -360,9 +412,13 @@ function ChatPage() {
   const accessibleModels = (modelCatalogQuery.data?.models ?? []).filter(
     (model) => model.available && (!model.proOnly || modelCatalogQuery.data?.isPro),
   );
-  const selectedModelId = accessibleModels.some((model) => model.id === modelId)
-    ? modelId
-    : (accessibleModels[0]?.id ?? FREE_CHAT_MODEL_IDS[0]);
+  const selectedModelId = isAuthenticatedUser
+    ? accessibleModels.some((model) => model.id === modelId)
+      ? modelId
+      : (accessibleModels[0]?.id ?? FREE_CHAT_MODEL_IDS[0])
+    : FREE_CHAT_MODEL_IDS.some((freeModelId) => freeModelId === modelId)
+      ? modelId
+      : FREE_CHAT_MODEL_IDS[0];
   const [responseStyle] = usePersistedState<ResponseStyle>("chat-response-style", "balanced");
   const [fastReply, setFastReply] = usePersistedState("chat-fast-reply", false);
   const [webSearch, setWebSearch] = usePersistedState("chat-web-search", false);
@@ -377,12 +433,13 @@ function ChatPage() {
   );
   const [messageSearch, setMessageSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const safeUserId = user?.id ?? "guest";
   const [pinnedMessages, setPinnedMessages] = usePersistedState<string[]>(
-    `chat-pins-${user.id}`,
+    `chat-pins-${safeUserId}`,
     [],
   );
   const [messageFeedback, setMessageFeedback] = usePersistedState<Record<string, "up" | "down">>(
-    `chat-feedback-${user.id}`,
+    `chat-feedback-${safeUserId}`,
     {},
   );
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -399,6 +456,7 @@ function ChatPage() {
   }, []);
   const { data: userSettings } = useQuery({
     queryKey: ["user_settings"],
+    enabled: isAuthenticatedUser,
     queryFn: getUserSettings,
   });
 
@@ -411,6 +469,15 @@ function ChatPage() {
     }
   }, [userSettings, setMode]);
   const [input, setInput] = useState("");
+  const [problemSolverSelectorOpen, setProblemSolverSelectorOpen] = useState(false);
+  const [problemSolverSelection, setProblemSolverSelection] = useState<{
+    originalPrompt: string;
+    subject?: string;
+    attachments: ChatSubmitPayload["attachments"];
+    tool: ChatSubmitPayload["tool"];
+  } | null>(null);
+  const problemFlowSignatureRef = useRef<string | null>(null);
+  const problemSolverGuardRef = useRef<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [imagePrompt, setImagePrompt] = useState("");
@@ -468,10 +535,10 @@ function ChatPage() {
   // card (ask-before-save) or auto-save it (above the confidence threshold),
   // depending on the user's memory settings. Detected memories never include
   // sensitive data (passwords, secrets, payment info).
-  const { data: memorySettings } = useMemorySettings(user.id);
-  const { data: memories = [] } = useMemories(user.id);
-  const saveDetected = useSaveDetectedMemory(user.id);
-  const addMemory = useAddMemory(user.id);
+  const { data: memorySettings } = useMemorySettings(userId);
+  const { data: memories = [] } = useMemories(userId);
+  const saveDetected = useSaveDetectedMemory(userId);
+  const addMemory = useAddMemory(userId);
   const [pendingMemories, setPendingMemories] = useState<{
     detected: DetectedMemory[];
     userMessage: UIMessage;
@@ -510,6 +577,7 @@ function ChatPage() {
   // window where two rapid clicks can both observe `busy === false` (notably
   // while attachments are being read) and create duplicate user turns.
   const requestInFlightRef = useRef(false);
+  const guestStreamActiveRef = useRef(false);
   const startedChatRequestsRef = useRef(new Set<string>());
   const cleanupEmptyConversationRef = useRef<(id: string | null) => Promise<string | null>>(
     async () => null,
@@ -553,12 +621,12 @@ function ChatPage() {
       metrics,
       history,
       responseStyle,
-      fastReply,
+      fastReply: user ? fastReply : false,
       webSearch,
       webSearchDepth,
       webSearchResults,
-      council: councilEnabled,
-      realityCheck,
+      council: user ? councilEnabled : false,
+      realityCheck: user ? realityCheck : false,
     },
   });
 
@@ -572,21 +640,23 @@ function ChatPage() {
       metrics,
       history,
       responseStyle,
-      fastReply,
+      fastReply: user ? fastReply : false,
       webSearch,
       webSearchDepth,
       webSearchResults,
-      council: councilEnabled,
-      realityCheck,
+      council: user ? councilEnabled : false,
+      realityCheck: user ? realityCheck : false,
     },
   };
   modeRef.current = mode;
 
   // Conversations list (Supabase)
   const { data: conversationsData } = useQuery({
-    queryKey: ["conversations", user.id],
+    queryKey: ["conversations", userId],
+    enabled: !!userId,
     initialData: () => {
-      const cached = getOfflineConversations<ConversationRow>(user.id);
+      if (!userId) return undefined;
+      const cached = getOfflineConversations<ConversationRow>(userId);
       return cached.length ? cached : undefined;
     },
     queryFn: async () => {
@@ -599,23 +669,24 @@ function ChatPage() {
     },
   });
   useEffect(() => {
-    if (conversationsData) saveOfflineConversations(user.id, conversationsData);
-  }, [conversationsData, user.id]);
+    if (!userId || !conversationsData) return;
+    saveOfflineConversations(userId, conversationsData);
+  }, [conversationsData, userId]);
   useEffect(() => {
     let active = true;
-    const queryKey = ["conversations", user.id] as const;
-    if (!qc.getQueryData(queryKey)) {
-      void hydrateOfflineConversations<ConversationRow>(user.id).then((rows) => {
+    const queryKey = ["conversations", userId] as const;
+    if (!userId || !qc.getQueryData(queryKey)) {
+      void hydrateOfflineConversations<ConversationRow>(userId).then((rows) => {
         if (active && rows.length && !qc.getQueryData(queryKey)) qc.setQueryData(queryKey, rows);
       });
     }
     return () => {
       active = false;
     };
-  }, [qc, user.id]);
+  }, [qc, userId]);
   const conversations = conversationsData ?? EMPTY_CONVERSATIONS;
   // Keep the key stable and shared by every cache mutation in this route.
-  const conversationsQueryKey = useMemo(() => ["conversations", user.id] as const, [user.id]);
+  const conversationsQueryKey = useMemo(() => ["conversations", userId] as const, [userId]);
 
   // Enrich conversations with their folder_id (the DB column is selected via `*`)
   // so the FolderSidebar can group them. Stable memo keeps identity across renders.
@@ -651,12 +722,10 @@ function ChatPage() {
     queryKey: ["messages", conversationId],
     initialData: () => {
       if (!conversationId || isOptimisticId(conversationId)) return undefined;
-      const cached = getOfflineMessages<MessageRow>(user.id, conversationId);
+      const cached = getOfflineMessages<MessageRow>(userId, conversationId);
       return cached.length ? cached : undefined;
     },
-    // Temporary ids are UI-only. In particular, never serialize one into a
-    // PostgREST filter for the UUID conversation_id column.
-    enabled: !!conversationId && !isOptimisticId(conversationId),
+    enabled: !!userId && !!conversationId && !isOptimisticId(conversationId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
@@ -668,12 +737,12 @@ function ChatPage() {
     },
   });
   useEffect(() => {
-    if (!conversationId || isOptimisticId(conversationId)) return;
-    if (storedMessagesData) saveOfflineMessages(user.id, conversationId, storedMessagesData);
+    if (!userId || !conversationId || isOptimisticId(conversationId)) return;
+    if (storedMessagesData) saveOfflineMessages(userId, conversationId, storedMessagesData);
     let active = true;
     const queryKey = ["messages", conversationId] as const;
-    if (!qc.getQueryData(queryKey)) {
-      void hydrateOfflineMessages<MessageRow>(user.id, conversationId).then((rows) => {
+    if (!userId || !qc.getQueryData(queryKey)) {
+      void hydrateOfflineMessages<MessageRow>(userId, conversationId).then((rows) => {
         if (active && rows.length && !qc.getQueryData(queryKey)) {
           qc.setQueryData(queryKey, rows);
         }
@@ -682,7 +751,7 @@ function ChatPage() {
     return () => {
       active = false;
     };
-  }, [conversationId, qc, storedMessagesData, user.id]);
+  }, [conversationId, qc, storedMessagesData, userId]);
   // Fall back to a *stable* empty array (not a fresh `[]` each render) so that
   // `initialMessages` keeps a stable identity while the query has no data.
   const storedMessages = storedMessagesData ?? EMPTY_STORED_MESSAGES;
@@ -728,6 +797,7 @@ function ChatPage() {
         .map((part) => (part as { text?: string }).text ?? "")
         .join("");
       const shouldTreatAsError = isError || isUnsafeAssistantError(unsafeCompletedText);
+      if (!user?.id || guestStreamActiveRef.current) return;
       void authenticatedFetch("/api/analytics/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -963,7 +1033,7 @@ function ChatPage() {
           const assistantRow = {
             id: assistantMessageId,
             conversation_id: dbActiveConversationId,
-            user_id: user.id,
+            user_id: userId,
             role: "assistant",
             content,
             model: requestMode,
@@ -1044,6 +1114,17 @@ function ChatPage() {
     },
   });
 
+  const wasGuestSessionRef = useRef(Boolean(routeContext.guest && !user));
+  useEffect(() => {
+    if (user?.id && wasGuestSessionRef.current) {
+      stop();
+      setMessages([]);
+      setConversationId(null);
+      activeConversationIdRef.current = null;
+    }
+    wasGuestSessionRef.current = Boolean(routeContext.guest && !user?.id);
+  }, [routeContext.guest, setMessages, stop, user?.id]);
+
   const busy = savingMessage || status === "submitted" || status === "streaming";
   isAssistantStreamingRef.current = status === "submitted" || status === "streaming";
 
@@ -1090,7 +1171,7 @@ function ChatPage() {
       markClientTagSent(tag);
       const { data, error } = await supabase
         .from("conversations")
-        .insert({ user_id: user.id, title, client_tag: tag })
+        .insert({ user_id: userId, title, client_tag: tag })
         .select()
         .single();
       if (error) throw error;
@@ -1166,7 +1247,7 @@ function ChatPage() {
   // Inserts an optimistic UI row and starts the real insert. The returned temp id
   // is never a database id: submitters await its stored promise before writing.
   const createConversationOptimistic = (title: string): string => {
-    const temp = createOptimisticConversation(user.id, title);
+    const temp = createOptimisticConversation(userId, title);
     qc.setQueryData<ConversationRow[]>(conversationsQueryKey, (old) => [temp, ...(old ?? [])]);
     setConversationId(temp.id);
     activeConversationIdRef.current = temp.id;
@@ -1282,7 +1363,7 @@ function ChatPage() {
         .from("conversations")
         .delete()
         .eq("id", id)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .select("id")
         .maybeSingle();
       if (error) throw error;
@@ -1632,7 +1713,7 @@ function ChatPage() {
           .insert({
             id: assistantId,
             conversation_id: targetConversationId,
-            user_id: user.id,
+            user_id: userId,
             role: "assistant",
             message_type: "image",
             content: "",
@@ -1653,7 +1734,7 @@ function ChatPage() {
         qc.invalidateQueries({ queryKey: ["messages", targetConversationId], exact: true });
       }
     },
-    [qc, setMessages, user.id],
+    [qc, setMessages, userId],
   );
 
   // Send a user message to the AI, choosing chat or image generation. The user
@@ -1744,7 +1825,7 @@ function ChatPage() {
     } else if (messages.length > 0) {
       setShowNewMessages(true);
     }
-  }, [messages, status, user.id]);
+  }, [messages, status, userId]);
 
   // ---- Cross-device live message sync -------------------------------------
   // Subscribes to realtime message events for the ACTIVE conversation only
@@ -1855,7 +1936,7 @@ function ChatPage() {
           const { error: insertError } = await supabase.from("messages").insert({
             id: msgId,
             conversation_id: convId,
-            user_id: user.id,
+            user_id: userId,
             role: "assistant",
             content,
             model: modeRef.current,
@@ -1889,7 +1970,7 @@ function ChatPage() {
           setPersistenceError(err instanceof Error ? err.message : "Unable to save the response.");
         });
     }
-  }, [messages, status, user.id]);
+  }, [messages, status, userId]);
 
   // Sync the messages loaded from Supabase into the chat when a conversation is
   // opened from the sidebar. This must run EXACTLY ONCE per opened conversation,
@@ -1977,6 +2058,65 @@ function ChatPage() {
     if (notes.length) text += `\n\nAttached files:\n${notes.join("\n")}`;
     if (blocks.length) text += blocks.join("");
     return text;
+  };
+
+  const normalizeProblemFlowSignature = (value: string): string =>
+    value.replace(/\s+/g, " ").trim().toLowerCase();
+
+  const detectProblemPreferenceOverride = (value: string): ProblemSolvingPreference | null => {
+    const normalized = normalizeProblemFlowSignature(value);
+    if (/(work through it together|step by step|walk me through|work with me)/.test(normalized)) {
+      return "work-together";
+    }
+    if (/(show me the answer|final answer|full solution|answer it completely)/.test(normalized)) {
+      return "show-answer";
+    }
+    if (/(quiz me|quiz on similar|similar questions|practice with similar)/.test(normalized)) {
+      return "quiz";
+    }
+    if (
+      /(voice mode|talk through it using voice|speak it out loud|voice assistant)/.test(normalized)
+    ) {
+      return "voice";
+    }
+    return null;
+  };
+
+  const handleProblemSolverChoice = (preference: ProblemSolvingPreference) => {
+    if (!problemSolverSelection) return;
+    const finalInstruction = {
+      "work-together":
+        "Work through this problem with me one step at a time. Explain the concept, formulas, and reasoning, and ask me to participate before revealing the complete answer.",
+      "show-answer":
+        "Solve this problem completely and accurately. Give the final answer and a clear step-by-step explanation using the correct method, and format math with KaTeX/LaTeX when relevant.",
+      quiz: "Quiz me on similar questions based on this prompt. Ask one question at a time, wait for my answer, evaluate it, explain mistakes, and give hints without revealing the answer before I attempt it.",
+      voice:
+        "Open the voice interface and explain this problem conversationally, step by step, in a natural soundboard-style way.",
+    }[preference];
+
+    const combinedPrompt = `${problemSolverSelection.originalPrompt}\n\n${finalInstruction}`;
+    const originalKey = normalizeProblemFlowSignature(problemSolverSelection.originalPrompt);
+    const guardedKey = normalizeProblemFlowSignature(combinedPrompt);
+    problemFlowSignatureRef.current = originalKey;
+    problemSolverGuardRef.current = guardedKey;
+    setProblemSolverSelectorOpen(false);
+    setProblemSolverSelection(null);
+
+    if (preference === "voice") {
+      const params = new URLSearchParams({
+        problem: problemSolverSelection.originalPrompt,
+        source: "problem-solver",
+      });
+      if (problemSolverSelection.subject) params.set("subject", problemSolverSelection.subject);
+      window.location.assign(`/voice?${params.toString()}`);
+      return;
+    }
+
+    void submit({
+      text: combinedPrompt,
+      attachments: problemSolverSelection.attachments,
+      tool: problemSolverSelection.tool,
+    });
   };
 
   // Run memory detection on the user's message and either auto-save or queue a
@@ -2072,6 +2212,94 @@ function ChatPage() {
       return true;
     }
     setFailedPayload(null);
+    const rawText = payload.text.trim();
+    const rawProblemKey = normalizeProblemFlowSignature(rawText);
+    const freshProblemIntent = detectProblemSolvingIntent(
+      rawText,
+      payload.attachments.map((attachment) => attachment.kind),
+    );
+    const explicitOverride = detectProblemPreferenceOverride(rawText);
+    const isProblemSolverGuarded =
+      problemSolverGuardRef.current && problemSolverGuardRef.current === rawProblemKey;
+
+    if (problemSolverGuardRef.current && problemSolverGuardRef.current === rawProblemKey) {
+      problemSolverGuardRef.current = null;
+    }
+
+    if (
+      (freshProblemIntent.kind === "solve" ||
+        freshProblemIntent.kind === "hint" ||
+        freshProblemIntent.kind === "check-answer") &&
+      !isProblemSolverGuarded
+    ) {
+      const sameFlowAlreadyHandled =
+        problemFlowSignatureRef.current !== null &&
+        normalizeProblemFlowSignature(problemFlowSignatureRef.current) === rawProblemKey;
+      const shouldShowSelector =
+        !sameFlowAlreadyHandled &&
+        !(freshProblemIntent.kind === "hint" || freshProblemIntent.kind === "check-answer");
+
+      if (shouldShowSelector || explicitOverride) {
+        const subject = freshProblemIntent.subject ?? undefined;
+        setProblemSolverSelection({
+          originalPrompt: rawText,
+          subject,
+          attachments: payload.attachments,
+          tool: payload.tool,
+        });
+        problemFlowSignatureRef.current = rawProblemKey;
+        setProblemSolverSelectorOpen(true);
+        requestInFlightRef.current = false;
+        setSavingMessage(false);
+        setProcessingLabel(null);
+        return true;
+      }
+    }
+
+    if (!user) {
+      if (!routeContext.guest || guestExpired) {
+        setPersistenceError("Your guest session has ended. Sign in to continue this conversation.");
+        return false;
+      }
+      requestInFlightRef.current = true;
+      setSavingMessage(true);
+      setPersistenceError(null);
+      try {
+        const text = await buildMessageText(payload);
+        if (!text.trim()) return false;
+        const files = await Promise.all(
+          payload.attachments
+            .filter((attachment) => attachment.kind === "image" || attachment.kind === "pdf")
+            .map(async (attachment) => ({
+              type: "file" as const,
+              mediaType:
+                attachment.kind === "pdf" ? "application/pdf" : attachment.file.type || "image/png",
+              filename: attachment.name.slice(0, 160),
+              url: await fileAsDataUrl(attachment.file),
+            })),
+        );
+        const guestMessage: UIMessage = {
+          id: crypto.randomUUID(),
+          role: "user",
+          parts: [{ type: "text", text }, ...files],
+        };
+        setInput("");
+        guestStreamActiveRef.current = true;
+        await sendMessage(guestMessage);
+        return true;
+      } catch (error) {
+        setPersistenceError(
+          error instanceof Error ? safeChatErrorMessage(error.message) : "The AI request failed.",
+        );
+        return false;
+      } finally {
+        guestStreamActiveRef.current = false;
+        requestInFlightRef.current = false;
+        setSavingMessage(false);
+        setProcessingLabel(null);
+      }
+    }
+
     const hasPdfAttachment = payload.attachments.some((attachment) => attachment.kind === "pdf");
     const hasImageAttachment = payload.attachments.some(
       (attachment) => attachment.kind === "image",
@@ -2121,7 +2349,7 @@ function ChatPage() {
       const multimodalParts = await Promise.all(
         multimodalAttachments.map(async (attachment) => {
           const filename = attachment.name.replace(/[\\/]/g, "_").slice(0, 160);
-          const storagePath = `${user.id}/${convId}/${attachment.id}/${filename}`;
+          const storagePath = `${userId}/${convId}/${attachment.id}/${filename}`;
           const mediaType =
             attachment.kind === "pdf" ? "application/pdf" : attachment.file.type || "image/png";
           const [url, uploaded] = await Promise.all([
@@ -2250,7 +2478,7 @@ function ChatPage() {
       optimisticUpsertMessage({
         id: userMsgId,
         conversation_id: dbConvId,
-        user_id: user.id,
+        user_id: userId,
         role: "user",
         content: text,
         model: mode,
@@ -2270,7 +2498,7 @@ function ChatPage() {
       const userRow = {
         id: userMsgId,
         conversation_id: dbConvId,
-        user_id: user.id,
+        user_id: userId,
         role: "user",
         content: text,
         model: mode,
@@ -2976,11 +3204,41 @@ function ChatPage() {
   return (
     <>
       <AppShell>
+        {routeContext.guest && (
+          <div className="mx-auto mb-3 flex w-full max-w-6xl items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+            <div>
+              {guestExpired ? (
+                <span className="font-medium text-destructive">
+                  Your guest session has ended. Your messages were temporary.
+                </span>
+              ) : (
+                <span className="font-medium text-primary">
+                  Guest access ·{" "}
+                  {guestSessionQuery.data?.expiresAt
+                    ? formatGuestRemaining(guestSessionQuery.data.expiresAt)
+                    : "Checking session…"}
+                </span>
+              )}
+              {showGuestAccessDenied && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sign in to open that protected LORD AI feature.
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => window.location.assign("/auth")}
+              className="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+            >
+              {guestExpired ? "Sign in to continue" : "Sign in"}
+            </button>
+          </div>
+        )}
         <div className="flex h-[calc(100svh-9.25rem)] min-h-0 gap-3 md:h-[calc(100vh-7rem)] md:gap-4">
-          {sidebarOpen && (
+          {isAuthenticatedUser && sidebarOpen && (
             <div className="hidden w-72 flex-shrink-0 lg:block">
               <FolderSidebar
-                userId={user.id}
+                userId={userId ?? ""}
                 conversationsQueryKey={conversationsQueryKey}
                 conversations={conversationsWithFolder}
                 currentId={conversationId}
@@ -3003,22 +3261,26 @@ function ChatPage() {
 
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <div className="flex min-w-0 items-center gap-2 px-1 pb-2">
-              <button
-                type="button"
-                onClick={() => setMobileHistoryOpen(true)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border/60 bg-background/40 text-muted-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 lg:hidden"
-                aria-label="Open chat history"
-                title="Chat history"
-              >
-                <History className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="hidden rounded-md border border-border/60 bg-background/40 p-2 text-muted-foreground transition hover:text-primary lg:block"
-                aria-label="Toggle sidebar"
-              >
-                <LayoutPanelLeft className="h-4 w-4" />
-              </button>
+              {isAuthenticatedUser && (
+                <button
+                  type="button"
+                  onClick={() => setMobileHistoryOpen(true)}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border/60 bg-background/40 text-muted-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 lg:hidden"
+                  aria-label="Open chat history"
+                  title="Chat history"
+                >
+                  <History className="h-4 w-4" />
+                </button>
+              )}
+              {isAuthenticatedUser && (
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="hidden rounded-md border border-border/60 bg-background/40 p-2 text-muted-foreground transition hover:text-primary lg:block"
+                  aria-label="Toggle sidebar"
+                >
+                  <LayoutPanelLeft className="h-4 w-4" />
+                </button>
+              )}
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <h1 className="truncate text-sm font-semibold text-foreground">
                   {conversations.find((c) => c.id === conversationId)?.title || "New conversation"}
@@ -3088,13 +3350,14 @@ function ChatPage() {
                   </button>
                   <ModelSelector
                     value={selectedModelId}
+                    enabled={isAuthenticatedUser}
                     onChange={(nextModelId) => {
                       setModelId(nextModelId);
                       emitDashboardEvent("ai");
                     }}
                   />
                   <ShareButton
-                    userId={user.id}
+                    userId={userId ?? ""}
                     conversationId={conversationId}
                     conversationTitle={
                       conversations.find((c) => c.id === conversationId)?.title ??
@@ -3332,13 +3595,19 @@ function ChatPage() {
                     )}
                   </section>
                 )}
+                <ProblemSolvingSelector
+                  open={problemSolverSelectorOpen}
+                  subject={problemSolverSelection?.subject}
+                  prompt={problemSolverSelection?.originalPrompt}
+                  onSubmit={handleProblemSolverChoice}
+                />
                 <ChatInput
                   value={input}
                   onChange={setInput}
                   onSend={submit}
                   onStop={stopStreaming}
                   streaming={streaming}
-                  disabled={savingMessage || !networkOnline}
+                  disabled={savingMessage || !networkOnline || guestExpired}
                   processingLabel={processingLabel}
                   resetKey={composerResetKey}
                   resetAttachmentIds={composerResetAttachmentIds}
@@ -3367,7 +3636,7 @@ function ChatPage() {
             </SheetHeader>
             <div className="min-h-0 flex-1">
               <FolderSidebar
-                userId={user.id}
+                userId={userId ?? ""}
                 conversationsQueryKey={conversationsQueryKey}
                 conversations={conversationsWithFolder}
                 currentId={conversationId}

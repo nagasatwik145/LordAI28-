@@ -22,5 +22,11 @@ export const THREE_D_CONTROLS = {
   adventure: { movement: ["left", "right", "up"], actions: ["jump"] },
   exploration: { movement: ["left", "right", "up"], actions: ["jump"] },
   platformer: { movement: ["left", "right", "up"], actions: ["jump"] },
-  fighting: { movement: ["left", "right", "up", "down"], actions: ["punch", "kick", "dodge", "web"] },
-} satisfies Record<Game3DSpec["gameType"], { movement: readonly ThreeDControlAction[]; actions: readonly ThreeDControlAction[] }>;
+  fighting: {
+    movement: ["left", "right", "up", "down"],
+    actions: ["punch", "kick", "dodge", "web"],
+  },
+} satisfies Record<
+  Game3DSpec["gameType"],
+  { movement: readonly ThreeDControlAction[]; actions: readonly ThreeDControlAction[] }
+>;

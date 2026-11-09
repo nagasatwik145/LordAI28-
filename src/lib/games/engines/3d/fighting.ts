@@ -11,12 +11,21 @@ export type FightingProgress = {
 
 export function getUnlockedSuitKeys(spec: FightingSpec, wins: number): string[] {
   const completed = Math.max(0, Math.floor(wins));
-  return spec.suits.filter((_, index) => index === 0 || completed >= index * spec.mechanics.suitUnlockEvery).map((suit) => suit.key);
+  return spec.suits
+    .filter((_, index) => index === 0 || completed >= index * spec.mechanics.suitUnlockEvery)
+    .map((suit) => suit.key);
 }
 
-export function createFightingProgress(spec: FightingSpec, wins = 0, selectedSuitKey?: string): FightingProgress {
+export function createFightingProgress(
+  spec: FightingSpec,
+  wins = 0,
+  selectedSuitKey?: string,
+): FightingProgress {
   const unlockedSuitKeys = getUnlockedSuitKeys(spec, wins);
-  const selected = selectedSuitKey && unlockedSuitKeys.includes(selectedSuitKey) ? selectedSuitKey : unlockedSuitKeys[0];
+  const selected =
+    selectedSuitKey && unlockedSuitKeys.includes(selectedSuitKey)
+      ? selectedSuitKey
+      : unlockedSuitKeys[0];
   return { wins: Math.max(0, Math.floor(wins)), selectedSuitKey: selected, unlockedSuitKeys };
 }
 
@@ -40,7 +49,12 @@ export function getFightEnemyHealth(spec: FightingSpec, completedFights: number)
 }
 
 export function getCombatDamage(spec: FightingSpec, move: CombatMove, comboCount: number): number {
-  const base = move === "punch" ? spec.mechanics.punchDamage : move === "kick" ? spec.mechanics.kickDamage : spec.mechanics.webDamage;
+  const base =
+    move === "punch"
+      ? spec.mechanics.punchDamage
+      : move === "kick"
+        ? spec.mechanics.kickDamage
+        : spec.mechanics.webDamage;
   return Math.round(base * Math.min(1.8, 1 + Math.max(0, comboCount - 1) * 0.08));
 }
 

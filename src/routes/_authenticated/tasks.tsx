@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bell, Check, Circle, Edit2, Plus, Save, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/lord/AppShell";
@@ -34,6 +34,7 @@ function toLocalInput(value: string | null) {
 
 function TasksPage() {
   const { user } = Route.useRouteContext();
+  if (!user) throw redirect({ to: "/auth", replace: true });
   const { tasks, loading, error, refresh } = useTasks(user.id);
   const [notifications, setNotifications] = useState<TaskNotification[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);

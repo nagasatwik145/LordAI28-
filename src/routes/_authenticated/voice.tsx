@@ -2,15 +2,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
-  ArrowLeft,
   History,
   Mic,
   MicOff,
+  Pause,
   Plus,
   RotateCcw,
   Subtitles,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/lord/AppShell";
@@ -32,7 +33,14 @@ import { parseVoiceMissionCommand, type VoiceMissionCommand } from "@/lib/voice/
 
 export const Route = createFileRoute("/_authenticated/voice")({
   head: () => ({ meta: [{ title: "LORD AI — Voice Assistant" }] }),
-  validateSearch: z.object({ conversationId: z.string().uuid().optional() }).catch({}),
+  validateSearch: z
+    .object({
+      conversationId: z.string().uuid().optional(),
+      problem: z.string().trim().min(1).max(4000).optional(),
+      subject: z.string().trim().max(120).optional(),
+      source: z.enum(["problem-solver"]).optional(),
+    })
+    .catch({}),
   component: VoicePage,
 });
 
@@ -73,11 +81,11 @@ async function readMissionResponse<T>(response: Response): Promise<T> {
 }
 
 function VoicePage() {
-  const { conversationId: linkedConversationId } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const { conversationId: linkedConversationId, problem, subject, source } = Route.useSearch();
   const {
     enabled,
     supported,
-    wakeWordAvailable,
     state,
     errorMessage,
     transcript,
@@ -87,15 +95,16 @@ function VoicePage() {
     activeConversationId,
     voiceOutputEnabled,
     voiceOutputSupported,
-    toggle,
-    enable,
     startTapToTalk,
+    startVoiceConversation,
+    pauseVoiceConversation,
+    resumeVoiceConversation,
+    endVoiceConversation,
     submitText,
     retryLast,
     loadConversation,
     startNewConversation,
     stopSpeaking,
-    stop,
     setVoiceOutputEnabled,
     stopListening,
     setCommandHandler,
@@ -111,6 +120,7 @@ function VoicePage() {
   const [missionResult, setMissionResult] = useState<VoiceMission | null>(null);
   const [recentMissions, setRecentMissions] = useState<VoiceMission[]>([]);
   const initialConversationHandledRef = useRef(false);
+  const initialProblemHandledRef = useRef(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const stayAtBottomRef = useRef(true);
   const { data: userId } = useQuery({
@@ -298,6 +308,15 @@ function VoicePage() {
   }, [linkedConversationId, loadConversation]);
 
   useEffect(() => {
+    if (!problem || source !== "problem-solver" || initialProblemHandledRef.current) return;
+    initialProblemHandledRef.current = true;
+    const subjectContext = subject ? ` This is a ${subject} problem.` : "";
+    void submitText(
+      `Talk me through this problem conversationally, one step at a time. Ask me to participate and do not rush to reveal the final answer.\n\n${problem}${subjectContext}`,
+    );
+  }, [problem, source, subject, submitText]);
+
+  useEffect(() => {
     if (stayAtBottomRef.current && transcriptRef.current) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
     }
@@ -311,13 +330,14 @@ function VoicePage() {
 
   const status = {
     disabled: "Ready when you are",
+    ended: "Voice conversation ended",
     paused: "Voice mode paused",
     requesting_permission: "Requesting microphone access",
-    wake_listening: "Listening for ‘Hey, LORD’",
+    wake_listening: enabled ? "Ready for your response" : "Ready when you are",
     activated: "LORD activated",
     command_listening: "Listening to your command",
-    processing: "Thinking",
-    speaking: "Speaking",
+    processing: "Processing your message",
+    speaking: "LORD is speaking",
     review: "Review the recognized command",
     error: "Voice assistant needs attention",
   }[state];
@@ -329,6 +349,14 @@ function VoicePage() {
     setTypedCommand("");
     void submitText(command);
   };
+
+  const handleBackToChat = useCallback(() => {
+    void navigate({
+      to: "/chat",
+      search: { conversationId: activeConversationId ?? linkedConversationId ?? undefined },
+      replace: true,
+    });
+  }, [activeConversationId, linkedConversationId, navigate]);
 
   return (
     <AppShell>
@@ -351,7 +379,6 @@ function VoicePage() {
             <Link
               to="/chat"
               search={{ conversationId: activeConversationId ?? undefined }}
-              onClick={stop}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border/60 px-3 text-sm text-muted-foreground transition hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Continue this conversation in text chat"
             >
@@ -366,13 +393,16 @@ function VoicePage() {
               <History className="h-4 w-4" />
               <span className="hidden sm:inline">History</span>
             </button>
-            <Link
-              to="/"
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border/60 px-3 text-sm text-muted-foreground transition hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={stop}
+            <button
+              type="button"
+              onClick={handleBackToChat}
+              aria-label="Back to Chat"
+              title="Back to Chat"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-muted-foreground shadow-[0_0_0_1px_rgba(148,163,184,0.08)] transition hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Close</span>
-            </Link>
+              <X className="h-4 w-4" />
+              <span className="sr-only">Back to Chat</span>
+            </button>
           </div>
         </header>
 
@@ -395,9 +425,9 @@ function VoicePage() {
           </p>
           {state === "disabled" && (
             <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
-              Hey Lord detection is unavailable until a local acoustic model is added. Tap to Talk
-              remains available on demand; LORD does not use continuous speech recognition as a
-              wake-word substitute.
+              Voice uses your browser speech service for one utterance at a time, pauses recognition
+              during replies, then reconnects automatically. Speech detection is controlled by the
+              browser; text chat remains available as a fallback.
             </p>
           )}
           {!supported && (
@@ -410,12 +440,10 @@ function VoicePage() {
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => (enabled ? toggle() : void enable())}
-              disabled={!supported || !wakeWordAvailable}
+              onClick={() => (enabled ? pauseVoiceConversation() : void startVoiceConversation())}
+              disabled={!supported || state === "requesting_permission"}
               aria-label={
-                enabled
-                  ? "Stop voice assistant and mute microphone"
-                  : "Hey Lord wake-word model is not installed"
+                enabled ? "Pause voice conversation and microphone" : "Start voice conversation"
               }
               aria-pressed={enabled}
               className={cn(
@@ -426,8 +454,33 @@ function VoicePage() {
               )}
             >
               {enabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              {enabled ? "Mute microphone" : "Wake word unavailable"}
+              {enabled ? "Pause conversation" : "Start Voice Conversation"}
             </button>
+            {(enabled || state === "paused") && (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    state === "paused"
+                      ? void resumeVoiceConversation()
+                      : void pauseVoiceConversation()
+                  }
+                  className="inline-flex min-h-12 items-center gap-2 rounded-full border border-border/70 px-4 text-sm text-foreground/85 transition hover:border-primary/40 hover:bg-primary/5"
+                  aria-label={state === "paused" ? "Resume voice conversation" : "Mute microphone"}
+                >
+                  {state === "paused" ? <Mic className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                  {state === "paused" ? "Resume" : "Mute microphone"}
+                </button>
+                <button
+                  type="button"
+                  onClick={endVoiceConversation}
+                  className="inline-flex min-h-12 items-center gap-2 rounded-full border border-rose-300/30 px-4 text-sm text-rose-100 transition hover:bg-rose-300/10"
+                  aria-label="End voice conversation"
+                >
+                  End conversation
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={() =>
@@ -651,10 +704,14 @@ function VoicePage() {
           >
             <p>{errorMessage}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {(state === "error" || state === "paused") && supported && wakeWordAvailable && (
+              {(state === "error" || state === "paused") && supported && (
                 <button
                   type="button"
-                  onClick={() => void enable()}
+                  onClick={() =>
+                    state === "paused"
+                      ? void resumeVoiceConversation()
+                      : void startVoiceConversation()
+                  }
                   className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-100/25 px-3 text-xs hover:bg-amber-100/5"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />

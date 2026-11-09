@@ -8,10 +8,13 @@ describe("parseVoiceMissionCommand", () => {
     ["pause active mission", { action: "pause" }],
     ["resume the mission", { action: "resume" }],
     ["cancel mission", { action: "cancel" }],
-    ["please start mission to prepare a biology revision plan", {
-      action: "start",
-      goal: "prepare a biology revision plan",
-    }],
+    [
+      "please start mission to prepare a biology revision plan",
+      {
+        action: "start",
+        goal: "prepare a biology revision plan",
+      },
+    ],
   ])("recognizes an exact command: %s", (input, expected) => {
     expect(parseVoiceMissionCommand(input)).toEqual(expected);
   });

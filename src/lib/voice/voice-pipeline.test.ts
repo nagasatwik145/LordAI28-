@@ -3,13 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   authenticatedFetch: vi.fn(),
   getUser: vi.fn(),
+  getSession: vi.fn(),
   from: vi.fn(),
 }));
 
 vi.mock("@/lib/authenticated-fetch", () => ({ authenticatedFetch: mocks.authenticatedFetch }));
 vi.mock("@/lib/api-config", () => ({ getApiBaseUrl: () => "" }));
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { auth: { getUser: mocks.getUser }, from: mocks.from },
+  supabase: { auth: { getUser: mocks.getUser, getSession: mocks.getSession }, from: mocks.from },
 }));
 
 import { VoicePipeline } from "./voice-pipeline";
@@ -23,6 +24,10 @@ const assistantStream = () =>
 function setupDatabase() {
   const messageInsert = vi.fn().mockResolvedValue({ error: null });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+  mocks.getSession.mockResolvedValue({
+    data: { session: { user: { id: "user-1" } } },
+    error: null,
+  });
   mocks.from.mockImplementation((table: string) => {
     if (table === "conversations") {
       return {
@@ -66,6 +71,39 @@ describe("VoicePipeline", () => {
         expect.objectContaining({ role: "assistant", text: "Hello from LORD." }),
       ]),
     );
+  });
+
+  it("handles exact voice controls locally, adds coarse page context, and leaves ordinary text alone", async () => {
+    const pipeline = new VoicePipeline("balanced", false);
+    const command = vi.fn();
+    pipeline.onControlCommand = command;
+    pipeline.setPageContext("LORD AI section: Study");
+
+    await pipeline.submitText("Hey, LORD, pause listening!");
+    expect(command).toHaveBeenCalledWith("pause");
+    expect(mocks.authenticatedFetch).not.toHaveBeenCalled();
+
+    await pipeline.submitText("I might stop voice someday, but keep helping me.");
+    const body = JSON.parse(mocks.authenticatedFetch.mock.calls[0][1].body);
+    expect(body.context).toEqual({ page: "LORD AI section: Study", responseStyle: "concise" });
+    expect(command).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["Bye LORD", "end"],
+    ["Stop voice.", "end"],
+    ["Turn off voice!", "end"],
+    ["Resume listening", "resume"],
+    ["Repeat that", "repeat"],
+    ["Speak slower", "slower"],
+    ["Stop speaking", "stop-speaking"],
+  ] as const)("recognizes the exact voice control %s", async (text, expected) => {
+    const pipeline = new VoicePipeline("balanced", false);
+    const command = vi.fn();
+    pipeline.onControlCommand = command;
+    await pipeline.submitText(text);
+    expect(command).toHaveBeenCalledExactlyOnceWith(expected);
+    expect(mocks.authenticatedFetch).not.toHaveBeenCalled();
   });
 
   it("stores voice conversations with the voice metadata tag so history queries match the database", async () => {
@@ -134,6 +172,28 @@ describe("VoicePipeline", () => {
       user_id: "user-1",
       title: "Say hello",
     });
+  });
+
+  it("allows guest voice requests without database writes when a guest cookie is present", async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    mocks.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new Error("Auth session missing"),
+    });
+    vi.stubGlobal("document", { cookie: "lord_guest_session=test-session" });
+
+    const pipeline = new VoicePipeline("balanced", false);
+    await pipeline.submitText("Guest voice command");
+
+    expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(pipeline.getMessages()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "user", text: "Guest voice command" }),
+        expect.objectContaining({ role: "assistant", text: "Hello from LORD." }),
+      ]),
+    );
   });
 
   it("preserves a failed transcript and retries the same saved user message", async () => {
@@ -269,6 +329,82 @@ describe("VoicePipeline", () => {
     emptyPipeline.stop();
   });
 
+  it("restarts listening after a completed turn only while the voice session remains active", async () => {
+    class FakeRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "";
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      onresult:
+        | ((event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void)
+        | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((event: { error?: string }) => void) | null = null;
+    }
+    const instances: FakeRecognition[] = [];
+    class RecordingRecognition extends FakeRecognition {
+      constructor() {
+        super();
+        instances.push(this);
+      }
+    }
+    vi.stubGlobal("window", { webkitSpeechRecognition: RecordingRecognition });
+    const pipeline = new VoicePipeline("balanced", false);
+    expect(pipeline.startConversation()).toBe(true);
+    expect(pipeline.startConversation()).toBe(false);
+    instances[0].onresult?.({
+      results: [{ isFinal: true, 0: { transcript: "First hands free turn" } }],
+    });
+    await vi.waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(instances).toHaveLength(2);
+    expect(instances[1].start).toHaveBeenCalledOnce();
+
+    pipeline.pauseConversation();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(instances).toHaveLength(2);
+    pipeline.stop();
+  });
+
+  it("bounds repeated speech-service failures instead of restarting forever", async () => {
+    vi.useFakeTimers();
+    try {
+      const instances: Array<{
+        start: ReturnType<typeof vi.fn>;
+        abort: ReturnType<typeof vi.fn>;
+        onerror: ((event: { error?: string }) => void) | null;
+      }> = [];
+      class FailingRecognition {
+        continuous = false;
+        interimResults = false;
+        lang = "";
+        onresult = null;
+        onend = null;
+        onerror: ((event: { error?: string }) => void) | null = null;
+        start = vi.fn(() => setTimeout(() => this.onerror?.({ error: "network" }), 0));
+        stop = vi.fn();
+        abort = vi.fn();
+        constructor() {
+          instances.push(this);
+        }
+      }
+      vi.stubGlobal("window", { webkitSpeechRecognition: FailingRecognition });
+      const pipeline = new VoicePipeline("balanced", false);
+      const onError = vi.fn();
+      pipeline.onError = onError;
+      expect(pipeline.startConversation()).toBe(true);
+
+      await vi.runAllTimersAsync();
+      expect(instances).toHaveLength(4);
+      expect(onError).toHaveBeenCalledWith(expect.stringContaining("stopped repeatedly"));
+      pipeline.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("offers a clear fallback when Chrome Web Speech recognition is unavailable", () => {
     vi.stubGlobal("window", {});
     const pipeline = new VoicePipeline("balanced", false);
@@ -279,38 +415,87 @@ describe("VoicePipeline", () => {
     expect(onError).toHaveBeenCalledWith(expect.stringContaining("not supported"));
   });
 
-  it("reports successful and failed TTS playback without hiding the text response", async () => {
-    class FakeUtterance {
-      text: string;
-      rate = 1;
+  it("waits for the recognition start event before reporting listening and handles spoken exit locally", () => {
+    class FakeRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "";
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      onstart: (() => void) | null = null;
+      onresult:
+        | ((event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void)
+        | null = null;
       onend: (() => void) | null = null;
+      onerror: ((event: { error?: string }) => void) | null = null;
+    }
+    vi.stubGlobal("window", { webkitSpeechRecognition: FakeRecognition });
+    const pipeline = new VoicePipeline("balanced", false);
+    const states: string[] = [];
+    const control = vi.fn();
+    pipeline.onStatusChange = (state) => states.push(state);
+    pipeline.onControlCommand = control;
+
+    expect(pipeline.startConversation()).toBe(true);
+    expect(states.at(-1)).toBe("requesting_permission");
+    const recognition = (pipeline as unknown as { recognition: FakeRecognition }).recognition;
+    recognition.onstart?.();
+    expect(states.at(-1)).toBe("command_listening");
+    recognition.onresult?.({ results: [{ isFinal: true, 0: { transcript: "Bye LORD" } }] });
+    expect(control).toHaveBeenCalledExactlyOnceWith("end");
+    expect(mocks.authenticatedFetch).not.toHaveBeenCalled();
+    pipeline.stop();
+  });
+
+  it("reports successful and failed TTS playback without hiding the text response", async () => {
+    class FakeAudio {
+      static instances: FakeAudio[] = [];
+      src = "";
+      preload = "";
+      onended: (() => void) | null = null;
       onerror: (() => void) | null = null;
-      constructor(text: string) {
-        this.text = text;
+      onpause: (() => void) | null = null;
+      play = vi.fn().mockResolvedValue(undefined);
+      pause = vi.fn();
+      currentTime = 0;
+
+      constructor() {
+        FakeAudio.instances.push(this);
       }
     }
-    const utterances: FakeUtterance[] = [];
-    const speechSynthesis = {
-      cancel: vi.fn(),
-      speak: vi.fn((utterance: FakeUtterance) => utterances.push(utterance)),
-    };
-    vi.stubGlobal("window", { speechSynthesis });
-    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+
+    const createObjectURL = vi.fn(() => "blob:mock-audio");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("window", {
+      Audio: FakeAudio,
+      URL: { createObjectURL, revokeObjectURL },
+    });
+    vi.stubGlobal("Audio", FakeAudio);
+    mocks.authenticatedFetch.mockImplementation(async (url: string | URL) => {
+      const target = typeof url === "string" ? url : url.toString();
+      if (target === "/api/chat") return assistantStream();
+      return new Response(new Blob(["music"], { type: "audio/mpeg" }));
+    });
+
     const pipeline = new VoicePipeline("balanced", true);
     const onError = vi.fn();
     pipeline.onError = onError;
 
     await pipeline.submitText("Speak this response");
-    expect(utterances).toHaveLength(1);
-    utterances[0].onend?.();
+    await vi.waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(2));
+    const firstAudio = (pipeline as unknown as { activeAudio: FakeAudio | null }).activeAudio;
+    expect(firstAudio).toBeTruthy();
+    firstAudio!.onended?.();
     expect(pipeline.getMessages().some((message) => message.text === "Hello from LORD.")).toBe(
       true,
     );
 
     await pipeline.submitText("Speak another response");
-    utterances.at(-1)?.onerror?.();
-    expect(onError).toHaveBeenCalledWith(
-      expect.stringContaining("text response is still available"),
+    const secondAudio = (pipeline as unknown as { activeAudio: FakeAudio | null }).activeAudio;
+    secondAudio!.onerror?.();
+    expect(pipeline.getMessages().some((message) => message.text === "Hello from LORD.")).toBe(
+      true,
     );
   });
 });

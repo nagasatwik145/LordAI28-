@@ -2,7 +2,15 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { readGuestSessionFromRequest } from "@/lib/guest-session";
+import { isAuthorizedHealthCenterUser } from "@/lib/health-center-access";
 import type { Database } from "./types";
+
+export const GUEST_ALLOWED_REQUEST_PATHS = new Set(["/api/chat", "/api/voice/tts"]);
+
+export function isGuestAllowedPath(pathname: string) {
+  return GUEST_ALLOWED_REQUEST_PATHS.has(pathname);
+}
 
 export async function getAuthenticatedSupabase(request: Request) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -98,6 +106,31 @@ export async function getAuthenticatedSupabase(request: Request) {
   };
 }
 
+export async function getRequestAuthContext(request: Request) {
+  try {
+    const authContext = await getAuthenticatedSupabase(request);
+    return { ...authContext, guest: false, guestSession: null };
+  } catch (authError) {
+    const guestSession = await readGuestSessionFromRequest(request);
+    if (!guestSession) {
+      throw authError;
+    }
+
+    const pathname = new URL(request.url).pathname;
+    if (!isGuestAllowedPath(pathname)) {
+      throw new Error("Guest access is restricted to chat and voice endpoints.");
+    }
+
+    return {
+      supabase: undefined as unknown as SupabaseClient<Database>,
+      userId: `guest:${guestSession.sessionId}`,
+      claims: { isGuest: true, guestSessionId: guestSession.sessionId },
+      guest: true,
+      guestSession,
+    };
+  }
+}
+
 export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
     const request = getRequest();
@@ -114,11 +147,69 @@ export const requireSupabaseRequestAuth = createMiddleware({ type: "request" }).
     const path = new URL(request.url).pathname;
     console.info(JSON.stringify({ event: "auth_start", message: "AUTH START", path }));
     try {
-      const authContext = await getAuthenticatedSupabase(request);
-      console.info(JSON.stringify({ event: "auth_ok", message: "AUTH OK", path }));
+      const authContext = await getRequestAuthContext(request);
+      console.info(
+        JSON.stringify({ event: "auth_ok", message: "AUTH OK", path, guest: authContext.guest }),
+      );
       return next({
         context: authContext,
       });
+    } catch (error) {
+      const guestRejected =
+        error instanceof Error && error.message.includes("Guest access is restricted");
+      console.warn(
+        JSON.stringify({
+          event: "auth_failed",
+          path,
+          reason: error instanceof Error ? error.message : "Authentication failed",
+        }),
+      );
+      return Response.json(
+        {
+          error: {
+            code: guestRejected ? "AI_FORBIDDEN" : "AI_AUTH_ERROR",
+            message: guestRejected
+              ? "Sign in to unlock this LORD AI feature."
+              : "Sign in to use this feature.",
+            requestId: crypto.randomUUID(),
+          },
+        },
+        {
+          status: guestRejected ? 403 : 401,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    }
+  },
+);
+
+export const requireHealthCenterAdmin = createMiddleware({ type: "request" }).server(
+  async ({ request, next }) => {
+    const path = new URL(request.url).pathname;
+    try {
+      const authContext = await getAuthenticatedSupabase(request);
+      const { data, error } = await authContext.supabase.auth.getUser();
+      const user = data.user;
+      if (error || !user || !isAuthorizedHealthCenterUser(user)) {
+        console.warn(
+          JSON.stringify({
+            event: "health_center_forbidden",
+            path,
+            reason: error?.message ?? "User is not authorized for Health Center.",
+          }),
+        );
+        return Response.json(
+          {
+            error: {
+              code: "AI_FORBIDDEN",
+              message: "Access denied.",
+              requestId: crypto.randomUUID(),
+            },
+          },
+          { status: 403, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      return next({ context: { ...authContext, user } });
     } catch (error) {
       console.warn(
         JSON.stringify({
@@ -127,9 +218,6 @@ export const requireSupabaseRequestAuth = createMiddleware({ type: "request" }).
           reason: error instanceof Error ? error.message : "Authentication failed",
         }),
       );
-      // Request middleware is used by JSON API routes. Returning a response
-      // here prevents auth failures from escaping into the global HTML error
-      // boundary and turning an expected 401 into a misleading 500 page.
       return Response.json(
         {
           error: {

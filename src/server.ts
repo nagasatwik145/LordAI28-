@@ -162,10 +162,13 @@ export default {
     } catch (error) {
       console.error("ERROR", error);
       console.error("STACK TRACE", error instanceof Error ? error.stack : undefined);
-      return addNativeCors(request, new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      }));
+      return addNativeCors(
+        request,
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
     }
   },
 };

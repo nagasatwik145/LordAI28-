@@ -11,11 +11,13 @@ import { App } from "@capacitor/app";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { useLocation } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { getSpeechRecognitionConstructor } from "@/lib/voice/webspeech-wake-engine";
 import { monitoring } from "@/lib/monitoring-service";
 import type { LordMode } from "@/lib/modes";
 import {
   VoicePipeline,
+  type VoiceControlCommand,
   type VoiceMessage,
   type VoicePipelineStatus,
 } from "@/lib/voice/voice-pipeline";
@@ -34,6 +36,7 @@ export type VoiceAssistantState =
   | "processing"
   | "speaking"
   | "paused"
+  | "ended"
   | "review"
   | "error";
 
@@ -59,6 +62,10 @@ interface WakeWordContextValue {
   stop: () => void;
   stopListening: () => void;
   startTapToTalk: () => Promise<void>;
+  startVoiceConversation: () => Promise<void>;
+  pauseVoiceConversation: () => void;
+  resumeVoiceConversation: () => Promise<void>;
+  endVoiceConversation: () => void;
   submitText: (text: string) => Promise<void>;
   setCommandHandler: (handler: ((text: string) => boolean) | null) => void;
   retryLast: () => Promise<void>;
@@ -94,6 +101,27 @@ function asLegacyStatus(state: VoiceAssistantState, supported: boolean): LegacyW
   }
 }
 
+function getVoicePageContext(pathname: string) {
+  const segments = pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => segment.toLowerCase());
+  if (segments.includes("tutor")) return "LORD AI section: Tutor";
+  if (segments.includes("study") || segments.includes("learning")) return "LORD AI section: Study";
+  const section = segments[0];
+  const labels: Record<string, string> = {
+    chat: "Chat",
+    study: "Study",
+    tutor: "Tutor",
+    community: "Community",
+    documents: "Documents",
+    command: "Command Center",
+    projects: "Projects",
+    research: "Research",
+  };
+  return section ? `LORD AI section: ${labels[section] ?? "Workspace"}` : "LORD AI dashboard";
+}
+
 export function WakeWordProvider({
   children,
   mode = "balanced",
@@ -121,7 +149,9 @@ export function WakeWordProvider({
   const pipelineRef = useRef<VoicePipeline | null>(null);
   const permissionRequestRef = useRef(0);
   const permissionInFlightRef = useRef(false);
+  const continuousSessionRef = useRef(false);
   const commandHandlerRef = useRef<((text: string) => boolean) | null>(null);
+  const controlHandlerRef = useRef<(command: VoiceControlCommand) => void>(() => {});
   const enabledRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -141,6 +171,7 @@ export function WakeWordProvider({
     permissionRequestRef.current += 1;
     permissionInFlightRef.current = false;
     enabledRef.current = false;
+    continuousSessionRef.current = false;
     pipelineRef.current?.stop();
     updateState("disabled");
   }, [updateState]);
@@ -168,10 +199,18 @@ export function WakeWordProvider({
   const wirePipeline = useCallback(() => {
     if (pipelineRef.current) return pipelineRef.current;
     const pipeline = new VoicePipeline(mode, voiceOutputEnabled, voiceRate);
+    pipeline.setPageContext(getVoicePageContext(location.pathname));
+    pipeline.onControlCommand = (command) => controlHandlerRef.current(command);
     pipeline.onStatusChange = (pipelineStatus: VoicePipelineStatus) => {
-      if (pipelineStatus === "wake_listening") {
+      if (pipelineStatus === "error") {
+        continuousSessionRef.current = false;
+        enabledRef.current = false;
+      }
+      if (pipelineStatus === "wake_listening" && !continuousSessionRef.current) {
         enabledRef.current = false;
         updateState("disabled");
+      } else if (pipelineStatus === "wake_listening") {
+        updateState("wake_listening");
       } else {
         updateState(pipelineStatus);
       }
@@ -192,7 +231,7 @@ export function WakeWordProvider({
     };
     pipelineRef.current = pipeline;
     return pipeline;
-  }, [mode, queryClient, updateState, voiceOutputEnabled, voiceRate]);
+  }, [location.pathname, mode, queryClient, updateState, voiceOutputEnabled, voiceRate]);
 
   const enable = useCallback(async () => {
     enabledRef.current = false;
@@ -241,6 +280,77 @@ export function WakeWordProvider({
     wirePipeline().startListening();
   }, [supported, updateState, wirePipeline]);
 
+  const startVoiceConversation = useCallback(async () => {
+    if (!supported || permissionInFlightRef.current) {
+      if (!supported) {
+        setErrorMessage("Continuous speech recognition is unavailable here. Use text chat.");
+        updateState("error");
+      }
+      return;
+    }
+    permissionInFlightRef.current = true;
+    const requestId = ++permissionRequestRef.current;
+    updateState("requesting_permission");
+    setErrorMessage("");
+    try {
+      // The Web Speech API owns microphone capture and permission. Avoid opening
+      // a second getUserMedia stream alongside the recognizer.
+      continuousSessionRef.current = true;
+      enabledRef.current = true;
+      const started = wirePipeline().startConversation();
+      if (!started) {
+        continuousSessionRef.current = false;
+        enabledRef.current = false;
+      }
+    } catch (error) {
+      continuousSessionRef.current = false;
+      enabledRef.current = false;
+      setErrorMessage(microphonePermissionError(error));
+      updateState("error");
+    } finally {
+      if (requestId === permissionRequestRef.current) permissionInFlightRef.current = false;
+    }
+  }, [supported, updateState, wirePipeline]);
+
+  const pauseVoiceConversation = useCallback(() => {
+    continuousSessionRef.current = false;
+    enabledRef.current = false;
+    pipelineRef.current?.pauseConversation();
+    updateState("paused");
+  }, [updateState]);
+
+  const endVoiceConversation = useCallback(() => {
+    permissionRequestRef.current += 1;
+    permissionInFlightRef.current = false;
+    enabledRef.current = false;
+    continuousSessionRef.current = false;
+    pipelineRef.current?.stop();
+    setErrorMessage("");
+    updateState("ended");
+  }, [updateState]);
+
+  const resumeVoiceConversation = useCallback(async () => {
+    if (!supported || permissionInFlightRef.current) return;
+    permissionInFlightRef.current = true;
+    const requestId = ++permissionRequestRef.current;
+    updateState("requesting_permission");
+    try {
+      continuousSessionRef.current = true;
+      enabledRef.current = true;
+      if (!wirePipeline().resumeConversation()) {
+        continuousSessionRef.current = false;
+        enabledRef.current = false;
+      }
+    } catch (error) {
+      continuousSessionRef.current = false;
+      enabledRef.current = false;
+      setErrorMessage(microphonePermissionError(error));
+      updateState("error");
+    } finally {
+      if (requestId === permissionRequestRef.current) permissionInFlightRef.current = false;
+    }
+  }, [supported, updateState, wirePipeline]);
+
   const submitText = useCallback(
     async (text: string) => {
       await wirePipeline().submitText(text);
@@ -249,6 +359,13 @@ export function WakeWordProvider({
   );
   const stopListening = useCallback(() => {
     if (stateRef.current !== "command_listening") return;
+    if (continuousSessionRef.current) {
+      pipelineRef.current?.pauseConversation();
+      continuousSessionRef.current = false;
+      enabledRef.current = false;
+      updateState("paused");
+      return;
+    }
     enabledRef.current = false;
     pipelineRef.current?.stopListening();
     updateState("disabled");
@@ -288,8 +405,52 @@ export function WakeWordProvider({
   }, [enable, stop]);
 
   useEffect(() => {
-    if (location.pathname !== "/voice" && enabledRef.current) stop();
-  }, [location.pathname, stop]);
+    pipelineRef.current?.setPageContext(getVoicePageContext(location.pathname));
+  }, [location.pathname]);
+
+  useEffect(() => {
+    controlHandlerRef.current = (command) => {
+      switch (command) {
+        case "pause":
+          pauseVoiceConversation();
+          break;
+        case "resume":
+          if (stateRef.current === "paused" || continuousSessionRef.current) {
+            void resumeVoiceConversation();
+          }
+          break;
+        case "repeat":
+          if (!pipelineRef.current?.repeatLastResponse()) {
+            setErrorMessage("There is no LORD reply to repeat yet.");
+          }
+          break;
+        case "slower":
+          pipelineRef.current?.speakSlower();
+          setErrorMessage("I’ll speak more slowly from now on.");
+          break;
+        case "stop-speaking":
+          pipelineRef.current?.stopSpeaking();
+          break;
+        case "end":
+          endVoiceConversation();
+          break;
+      }
+    };
+  }, [endVoiceConversation, pauseVoiceConversation, resumeVoiceConversation]);
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT") return;
+      continuousSessionRef.current = false;
+      enabledRef.current = false;
+      pipelineRef.current?.startNewConversation();
+      setMessages([]);
+      setActiveConversationId(null);
+      setErrorMessage("");
+      updateState("ended");
+    });
+    return () => data.subscription.unsubscribe();
+  }, [updateState]);
 
   useEffect(() => {
     try {
@@ -330,6 +491,44 @@ export function WakeWordProvider({
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [pauseForLifecycle]);
+
+  useEffect(() => {
+    let disposed = false;
+    let permission: PermissionStatus | null = null;
+    const handlePermissionChange = () => {
+      if (!permission || permission.state !== "denied" || !enabledRef.current) return;
+      stop();
+      setErrorMessage(
+        "Microphone permission was revoked. Allow microphone access in browser settings, then resume voice.",
+      );
+      updateState("error");
+    };
+    if (navigator.permissions?.query) {
+      void navigator.permissions
+        .query({ name: "microphone" as PermissionName })
+        .then((status) => {
+          if (disposed) return;
+          permission = status;
+          permission.addEventListener("change", handlePermissionChange);
+        })
+        .catch(() => undefined);
+    }
+    const handleDeviceChange = () => {
+      if (!enabledRef.current || !navigator.mediaDevices?.enumerateDevices) return;
+      void navigator.mediaDevices.enumerateDevices().then((devices) => {
+        if (!enabledRef.current || devices.some((device) => device.kind === "audioinput")) return;
+        stop();
+        setErrorMessage("The microphone was disconnected. Reconnect it and resume voice.");
+        updateState("error");
+      });
+    };
+    navigator.mediaDevices?.addEventListener("devicechange", handleDeviceChange);
+    return () => {
+      disposed = true;
+      permission?.removeEventListener("change", handlePermissionChange);
+      navigator.mediaDevices?.removeEventListener("devicechange", handleDeviceChange);
+    };
+  }, [stop, updateState]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -394,6 +593,10 @@ export function WakeWordProvider({
     stop,
     stopListening,
     startTapToTalk,
+    startVoiceConversation,
+    pauseVoiceConversation,
+    resumeVoiceConversation,
+    endVoiceConversation,
     submitText,
     setCommandHandler,
     retryLast,
