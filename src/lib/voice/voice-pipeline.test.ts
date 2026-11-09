@@ -73,6 +73,42 @@ describe("VoicePipeline", () => {
     );
   });
 
+  it("sends the selected voice and speed to the authenticated Fish Audio endpoint", async () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:voice-preview"),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.stubGlobal(
+      "Audio",
+      class {
+        preload = "";
+        onended: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        async play() {}
+        pause() {}
+      },
+    );
+    mocks.authenticatedFetch.mockResolvedValue(new Response(new Blob(["audio"]), { status: 200 }));
+    const voiceId = "933563129e564b19a115bedd57b7406a";
+    const pipeline = new VoicePipeline("balanced", true, 1.15, voiceId);
+
+    await (pipeline as unknown as { speak: (text: string) => Promise<boolean> }).speak(
+      "Voice selection test",
+    );
+
+    expect(mocks.authenticatedFetch).toHaveBeenCalledWith(
+      "/api/voice/tts",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(JSON.parse(mocks.authenticatedFetch.mock.calls[0][1].body)).toEqual({
+      text: "Voice selection test",
+      speed: 1.15,
+      voiceId,
+    });
+  });
+
   it("handles exact voice controls locally, adds coarse page context, and leaves ordinary text alone", async () => {
     const pipeline = new VoicePipeline("balanced", false);
     const command = vi.fn();

@@ -39,9 +39,15 @@ function UserSettingsHydrator({ children }: { children: ReactNode }) {
   const voiceMode: LordMode = (userSettings?.default_mode as LordMode) ?? DEFAULT_MODE;
   const autoSpeak = userSettings?.auto_speak ?? true;
   const voiceRate = userSettings?.voice_rate ?? 1;
+  const voiceId = userSettings?.voice_id ?? null;
 
   return (
-    <WakeWordProvider mode={voiceMode} autoSpeak={autoSpeak} voiceRate={voiceRate}>
+    <WakeWordProvider
+      mode={voiceMode}
+      autoSpeak={autoSpeak}
+      voiceRate={voiceRate}
+      voiceId={voiceId}
+    >
       {children}
     </WakeWordProvider>
   );

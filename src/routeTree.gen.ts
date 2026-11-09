@@ -134,6 +134,7 @@ import { Route as ApiSharedTokenRouteImport } from './routes/api/shared/$token'
 import { Route as ApiSharesTokenRouteImport } from './routes/api/shares/$token'
 import { Route as ApiStudyPlansIndexRouteImport } from './routes/api/study-plans/index'
 import { Route as ApiStudyPlansIdRouteImport } from './routes/api/study-plans/$id'
+import { Route as ApiVoiceCatalogRouteImport } from './routes/api/voice/catalog'
 import { Route as ApiVoiceMissionsRouteImport } from './routes/api/voice/missions'
 import { Route as ApiVoiceTtsRouteImport } from './routes/api/voice/tts'
 import { Route as CommunityCreatorsNameRouteImport } from './routes/community/creators/$name'
@@ -150,6 +151,7 @@ import { Route as ApiLordOfficeExcelRouteImport } from './routes/api/lord/office
 import { Route as ApiLordOfficePowerpointRouteImport } from './routes/api/lord/office/powerpoint'
 import { Route as ApiLordVisionScreenRouteImport } from './routes/api/lord/vision/screen'
 import { Route as ApiLordVisionWebcamRouteImport } from './routes/api/lord/vision/webcam'
+import { Route as ApiVoiceCatalogManageRouteImport } from './routes/api/voice/catalog/manage'
 import { Route as ApiLordIotDeviceActionRouteImport } from './routes/api/lord/iot/device/action'
 import { Route as ApiResearchIdSourcesIndexRouteImport } from './routes/api/research/$id/sources/index'
 import { Route as ApiStudyPlansIdAiGenerateRouteImport } from './routes/api/study-plans/$id/ai/generate'
@@ -805,6 +807,11 @@ const ApiStudyPlansIdRoute = ApiStudyPlansIdRouteImport.update({
   path: '/api/study-plans/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVoiceCatalogRoute = ApiVoiceCatalogRouteImport.update({
+  id: '/api/voice/catalog',
+  path: '/api/voice/catalog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiVoiceMissionsRoute = ApiVoiceMissionsRouteImport.update({
   id: '/api/voice/missions',
   path: '/api/voice/missions',
@@ -886,6 +893,11 @@ const ApiLordVisionWebcamRoute = ApiLordVisionWebcamRouteImport.update({
   id: '/api/lord/vision/webcam',
   path: '/api/lord/vision/webcam',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVoiceCatalogManageRoute = ApiVoiceCatalogManageRouteImport.update({
+  id: '/manage',
+  path: '/manage',
+  getParentRoute: () => ApiVoiceCatalogRoute,
 } as any)
 const ApiLordIotDeviceActionRoute = ApiLordIotDeviceActionRouteImport.update({
   id: '/api/lord/iot/device/action',
@@ -1042,6 +1054,7 @@ export interface FileRoutesByFullPath {
   '/api/shared/$token': typeof ApiSharedTokenRoute
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
+  '/api/voice/catalog': typeof ApiVoiceCatalogRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
   '/api/voice/tts': typeof ApiVoiceTtsRoute
   '/community/creators/$name': typeof CommunityCreatorsNameRoute
@@ -1070,6 +1083,7 @@ export interface FileRoutesByFullPath {
   '/api/lord/office/powerpoint': typeof ApiLordOfficePowerpointRoute
   '/api/lord/vision/screen': typeof ApiLordVisionScreenRoute
   '/api/lord/vision/webcam': typeof ApiLordVisionWebcamRoute
+  '/api/voice/catalog/manage': typeof ApiVoiceCatalogManageRoute
   '/api/lord/iot/device/action': typeof ApiLordIotDeviceActionRoute
   '/api/study-plans/$id/ai/generate': typeof ApiStudyPlansIdAiGenerateRoute
   '/api/study-plans/$id/ai/optimize': typeof ApiStudyPlansIdAiOptimizeRoute
@@ -1190,6 +1204,7 @@ export interface FileRoutesByTo {
   '/api/shared/$token': typeof ApiSharedTokenRoute
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
+  '/api/voice/catalog': typeof ApiVoiceCatalogRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
   '/api/voice/tts': typeof ApiVoiceTtsRoute
   '/community/creators/$name': typeof CommunityCreatorsNameRoute
@@ -1218,6 +1233,7 @@ export interface FileRoutesByTo {
   '/api/lord/office/powerpoint': typeof ApiLordOfficePowerpointRoute
   '/api/lord/vision/screen': typeof ApiLordVisionScreenRoute
   '/api/lord/vision/webcam': typeof ApiLordVisionWebcamRoute
+  '/api/voice/catalog/manage': typeof ApiVoiceCatalogManageRoute
   '/api/lord/iot/device/action': typeof ApiLordIotDeviceActionRoute
   '/api/study-plans/$id/ai/generate': typeof ApiStudyPlansIdAiGenerateRoute
   '/api/study-plans/$id/ai/optimize': typeof ApiStudyPlansIdAiOptimizeRoute
@@ -1341,6 +1357,7 @@ export interface FileRoutesById {
   '/api/shared/$token': typeof ApiSharedTokenRoute
   '/api/shares/$token': typeof ApiSharesTokenRoute
   '/api/study-plans/$id': typeof ApiStudyPlansIdRouteWithChildren
+  '/api/voice/catalog': typeof ApiVoiceCatalogRouteWithChildren
   '/api/voice/missions': typeof ApiVoiceMissionsRoute
   '/api/voice/tts': typeof ApiVoiceTtsRoute
   '/community/creators/$name': typeof CommunityCreatorsNameRoute
@@ -1369,6 +1386,7 @@ export interface FileRoutesById {
   '/api/lord/office/powerpoint': typeof ApiLordOfficePowerpointRoute
   '/api/lord/vision/screen': typeof ApiLordVisionScreenRoute
   '/api/lord/vision/webcam': typeof ApiLordVisionWebcamRoute
+  '/api/voice/catalog/manage': typeof ApiVoiceCatalogManageRoute
   '/api/lord/iot/device/action': typeof ApiLordIotDeviceActionRoute
   '/api/study-plans/$id/ai/generate': typeof ApiStudyPlansIdAiGenerateRoute
   '/api/study-plans/$id/ai/optimize': typeof ApiStudyPlansIdAiOptimizeRoute
@@ -1492,6 +1510,7 @@ export interface FileRouteTypes {
     | '/api/shared/$token'
     | '/api/shares/$token'
     | '/api/study-plans/$id'
+    | '/api/voice/catalog'
     | '/api/voice/missions'
     | '/api/voice/tts'
     | '/community/creators/$name'
@@ -1520,6 +1539,7 @@ export interface FileRouteTypes {
     | '/api/lord/office/powerpoint'
     | '/api/lord/vision/screen'
     | '/api/lord/vision/webcam'
+    | '/api/voice/catalog/manage'
     | '/api/lord/iot/device/action'
     | '/api/study-plans/$id/ai/generate'
     | '/api/study-plans/$id/ai/optimize'
@@ -1640,6 +1660,7 @@ export interface FileRouteTypes {
     | '/api/shared/$token'
     | '/api/shares/$token'
     | '/api/study-plans/$id'
+    | '/api/voice/catalog'
     | '/api/voice/missions'
     | '/api/voice/tts'
     | '/community/creators/$name'
@@ -1668,6 +1689,7 @@ export interface FileRouteTypes {
     | '/api/lord/office/powerpoint'
     | '/api/lord/vision/screen'
     | '/api/lord/vision/webcam'
+    | '/api/voice/catalog/manage'
     | '/api/lord/iot/device/action'
     | '/api/study-plans/$id/ai/generate'
     | '/api/study-plans/$id/ai/optimize'
@@ -1790,6 +1812,7 @@ export interface FileRouteTypes {
     | '/api/shared/$token'
     | '/api/shares/$token'
     | '/api/study-plans/$id'
+    | '/api/voice/catalog'
     | '/api/voice/missions'
     | '/api/voice/tts'
     | '/community/creators/$name'
@@ -1818,6 +1841,7 @@ export interface FileRouteTypes {
     | '/api/lord/office/powerpoint'
     | '/api/lord/vision/screen'
     | '/api/lord/vision/webcam'
+    | '/api/voice/catalog/manage'
     | '/api/lord/iot/device/action'
     | '/api/study-plans/$id/ai/generate'
     | '/api/study-plans/$id/ai/optimize'
@@ -1895,6 +1919,7 @@ export interface RootRouteChildren {
   ApiProjectsIdRoute: typeof ApiProjectsIdRoute
   ApiSharedTokenRoute: typeof ApiSharedTokenRoute
   ApiStudyPlansIdRoute: typeof ApiStudyPlansIdRouteWithChildren
+  ApiVoiceCatalogRoute: typeof ApiVoiceCatalogRouteWithChildren
   ApiVoiceMissionsRoute: typeof ApiVoiceMissionsRoute
   ApiVoiceTtsRoute: typeof ApiVoiceTtsRoute
   CommunityCreatorsNameRoute: typeof CommunityCreatorsNameRoute
@@ -2796,6 +2821,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStudyPlansIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/voice/catalog': {
+      id: '/api/voice/catalog'
+      path: '/api/voice/catalog'
+      fullPath: '/api/voice/catalog'
+      preLoaderRoute: typeof ApiVoiceCatalogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/voice/missions': {
       id: '/api/voice/missions'
       path: '/api/voice/missions'
@@ -2907,6 +2939,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/lord/vision/webcam'
       preLoaderRoute: typeof ApiLordVisionWebcamRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/voice/catalog/manage': {
+      id: '/api/voice/catalog/manage'
+      path: '/manage'
+      fullPath: '/api/voice/catalog/manage'
+      preLoaderRoute: typeof ApiVoiceCatalogManageRouteImport
+      parentRoute: typeof ApiVoiceCatalogRoute
     }
     '/api/lord/iot/device/action': {
       id: '/api/lord/iot/device/action'
@@ -3166,6 +3205,18 @@ const ApiStudyPlansIdRouteWithChildren = ApiStudyPlansIdRoute._addFileChildren(
   ApiStudyPlansIdRouteChildren,
 )
 
+interface ApiVoiceCatalogRouteChildren {
+  ApiVoiceCatalogManageRoute: typeof ApiVoiceCatalogManageRoute
+}
+
+const ApiVoiceCatalogRouteChildren: ApiVoiceCatalogRouteChildren = {
+  ApiVoiceCatalogManageRoute: ApiVoiceCatalogManageRoute,
+}
+
+const ApiVoiceCatalogRouteWithChildren = ApiVoiceCatalogRoute._addFileChildren(
+  ApiVoiceCatalogRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
@@ -3234,6 +3285,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiProjectsIdRoute: ApiProjectsIdRoute,
   ApiSharedTokenRoute: ApiSharedTokenRoute,
   ApiStudyPlansIdRoute: ApiStudyPlansIdRouteWithChildren,
+  ApiVoiceCatalogRoute: ApiVoiceCatalogRouteWithChildren,
   ApiVoiceMissionsRoute: ApiVoiceMissionsRoute,
   ApiVoiceTtsRoute: ApiVoiceTtsRoute,
   CommunityCreatorsNameRoute: CommunityCreatorsNameRoute,

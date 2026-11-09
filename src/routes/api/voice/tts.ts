@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
 import { apiErrorResponse } from "@/lib/api-error";
+import { isFishVoiceIdFormat } from "@/lib/voice/fish-voice-catalog";
 
 const TtsRequestSchema = z.object({
   text: z.string().trim().min(1).max(12_000),
@@ -40,7 +41,24 @@ export const Route = createFileRoute("/api/voice/tts")({
           }
 
           const model = process.env.FISH_TTS_MODEL || parsed.data.model || "s2.1-pro-free";
-          const voiceId = process.env.FISH_VOICE_ID?.trim();
+          if (parsed.data.voiceId && !isFishVoiceIdFormat(parsed.data.voiceId)) {
+            return apiErrorResponse(
+              400,
+              "INVALID_REQUEST",
+              "Choose a voice from the available Voice Studio options.",
+              requestId,
+            );
+          }
+          const { isTrustedFishVoiceId } = await import("@/lib/voice/fish-voice-catalog.server");
+          if (parsed.data.voiceId && !(await isTrustedFishVoiceId(parsed.data.voiceId))) {
+            return apiErrorResponse(
+              400,
+              "INVALID_REQUEST",
+              "Choose a voice from the available Voice Studio options.",
+              requestId,
+            );
+          }
+          const voiceId = parsed.data.voiceId || process.env.FISH_VOICE_ID?.trim();
 
           const upstream = await fetch("https://api.fish.audio/v1/tts", {
             method: "POST",

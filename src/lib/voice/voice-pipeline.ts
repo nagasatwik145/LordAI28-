@@ -141,6 +141,7 @@ export class VoicePipeline {
   private pageContext = "LORD AI";
   private autoSpeak: boolean;
   private voiceRate: number;
+  private voiceId: string | null;
   private interimTranscript = "";
   private failedUserMessage: VoiceMessage | null = null;
   private failedUserSaved = false;
@@ -185,10 +186,20 @@ export class VoicePipeline {
     return this.voiceRate;
   }
 
-  constructor(mode: LordMode = "balanced", autoSpeak = true, voiceRate = 1) {
+  constructor(
+    mode: LordMode = "balanced",
+    autoSpeak = true,
+    voiceRate = 1,
+    voiceId: string | null = null,
+  ) {
     this.mode = mode;
     this.autoSpeak = autoSpeak;
     this.voiceRate = voiceRate;
+    this.voiceId = voiceId;
+  }
+
+  setVoiceId(voiceId: string | null) {
+    this.voiceId = voiceId;
   }
 
   setVoiceOutput(enabled: boolean) {
@@ -713,7 +724,7 @@ export class VoicePipeline {
       const response = await authenticatedFetch(`${getApiBaseUrl()}/api/voice/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, speed: this.voiceRate }),
+        body: JSON.stringify({ text, speed: this.voiceRate, voiceId: this.voiceId }),
         signal: controller.signal,
       });
       if (playbackGeneration !== this.speechGeneration) return false;

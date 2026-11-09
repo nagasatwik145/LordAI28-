@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { AppShell } from "@/components/lord/AppShell";
@@ -53,6 +53,9 @@ import {
   Target,
   Calendar,
   Image as ImageIcon,
+  Play,
+  Check,
+  Volume2,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -66,6 +69,11 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { useWakeWord } from "@/components/lord/WakeWordProvider";
 import { getVoiceMicrophonePermission } from "@/lib/voice/microphone";
+import {
+  FISH_VOICES,
+  LORD_DEFAULT_VOICE_ID,
+  type FishVoiceCategory,
+} from "@/lib/voice/fish-voice-catalog";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "LORD — Settings" }] }),
@@ -248,10 +256,38 @@ function SettingsPage() {
       return ((await response.json()) as { enabled: boolean }).enabled;
     },
   });
+  const { data: voiceCatalog } = useQuery({
+    queryKey: ["fish-voice-catalog"],
+    queryFn: async () => {
+      const response = await authenticatedFetch("/api/voice/catalog", { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load voice catalog.");
+      return (await response.json()) as {
+        voices: Array<{
+          id: string;
+          name: string;
+          description: string;
+          category: FishVoiceCategory;
+          is_default?: boolean;
+        }>;
+        canManage: boolean;
+      };
+    },
+  });
 
   const [defaultMode, setDefaultMode] = useState("balanced");
   const [voiceRate, setVoiceRate] = useState(1);
   const [autoSpeak, setAutoSpeak] = useState(true);
+  const [voiceId, setVoiceId] = useState<string>(LORD_DEFAULT_VOICE_ID);
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const [showAddVoice, setShowAddVoice] = useState(false);
+  const [newVoice, setNewVoice] = useState({
+    id: "",
+    name: "",
+    description: "",
+    category: "other" as FishVoiceCategory,
+  });
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const [notifications, setNotifications] = useState(true);
   const [theme, setTheme] = useState("dark");
   const [imgDefaults, setImgDefaults] = useState(getImageGenDefaults());
@@ -283,12 +319,14 @@ function SettingsPage() {
       default_mode: string;
       voice_rate: number;
       auto_speak: boolean;
+      voice_id: string | null;
       notifications_enabled: boolean;
       theme: string;
     };
     setDefaultMode(settings.default_mode ?? "balanced");
     setVoiceRate(Number(settings.voice_rate ?? 1));
     setAutoSpeak(settings.auto_speak ?? true);
+    setVoiceId(settings.voice_id ?? LORD_DEFAULT_VOICE_ID);
     setNotifications(settings.notifications_enabled ?? true);
     const savedTheme = settings.theme ?? "dark";
     setTheme(savedTheme);
@@ -302,6 +340,16 @@ function SettingsPage() {
       document.documentElement.classList.toggle("dark", savedTheme !== "light");
     }
   }, [data]);
+
+  useEffect(
+    () => () => {
+      previewAudioRef.current?.pause();
+      previewAudioRef.current = null;
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    },
+    [],
+  );
 
   const { data: memories = [], isLoading: memoriesLoading } = useMemories(user?.id);
   const { data: memorySettings } = useMemorySettings(user?.id);
@@ -334,6 +382,101 @@ function SettingsPage() {
       emitDashboardEvent("all");
     },
   });
+
+  const voiceMutation = useMutation({
+    mutationFn: async (nextVoiceId: string) => {
+      await saveSettings({ data: { voice_id: nextVoiceId } });
+      return nextVoiceId;
+    },
+    onSuccess: (nextVoiceId) => {
+      setVoiceId(nextVoiceId);
+      void qc.invalidateQueries({ queryKey: ["user_settings"] });
+      toast.success("Voice preference saved");
+    },
+    onError: () => toast.error("Could not save your voice preference"),
+  });
+
+  const addVoiceMutation = useMutation({
+    mutationFn: async () => {
+      const response = await authenticatedFetch("/api/voice/catalog/manage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newVoice),
+      });
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(result?.error || "Could not add voice.");
+      }
+    },
+    onSuccess: () => {
+      setNewVoice({ id: "", name: "", description: "", category: "other" });
+      setShowAddVoice(false);
+      void qc.invalidateQueries({ queryKey: ["fish-voice-catalog"] });
+      toast.success("Voice added to the catalog");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const removeVoiceMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await authenticatedFetch("/api/voice/catalog/manage", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(result?.error || "Could not remove voice.");
+      }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["fish-voice-catalog"] });
+      void qc.invalidateQueries({ queryKey: ["user_settings"] });
+      toast.success("Voice removed from the catalog");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const previewVoice = async (id: string) => {
+    previewAudioRef.current?.pause();
+    previewAudioRef.current = null;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewingVoiceId(id);
+    try {
+      const response = await authenticatedFetch("/api/voice/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Hello, I’m LORD. This is a preview of your selected voice.",
+          speed: voiceRate,
+          voiceId: id,
+        }),
+      });
+      if (!response.ok) throw new Error("Voice preview is unavailable");
+      const url = URL.createObjectURL(await response.blob());
+      previewUrlRef.current = url;
+      const audio = new Audio(url);
+      previewAudioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        previewUrlRef.current = null;
+        previewAudioRef.current = null;
+        setPreviewingVoiceId(null);
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        previewUrlRef.current = null;
+        previewAudioRef.current = null;
+        setPreviewingVoiceId(null);
+        toast.error("Voice preview could not be played");
+      };
+      await audio.play();
+    } catch {
+      setPreviewingVoiceId(null);
+      toast.error("Voice preview is unavailable right now");
+    }
+  };
 
   const analytics = useMemo(() => {
     const total = memories.length;
@@ -458,6 +601,180 @@ function SettingsPage() {
                 Tune LORD's behavior. Synced to your account.
               </p>
             </motion.div>
+
+            <motion.section variants={itemVariants}>
+              <div className="hud-panel relative overflow-hidden rounded-xl p-5 sm:p-6">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/[0.08] via-transparent to-rose-500/[0.04]" />
+                <div className="relative flex items-start gap-3">
+                  <div className="rounded-xl border border-primary/30 bg-primary/10 p-2.5 text-primary">
+                    <Volume2 className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-lg font-semibold text-foreground">
+                      Voice Studio
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Choose LORD’s spoken voice. Your preference syncs with your account.
+                    </p>
+                  </div>
+                </div>
+                <div className="relative mt-4 grid gap-3 sm:grid-cols-2">
+                  {(voiceCatalog?.voices ?? FISH_VOICES).map((voice) => {
+                    const selected = voice.id === voiceId;
+                    return (
+                      <article
+                        key={voice.id}
+                        className={cn(
+                          "rounded-xl border p-4 transition-colors",
+                          selected
+                            ? "border-primary/60 bg-primary/[0.07]"
+                            : "border-border/60 bg-background/30",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="font-medium text-foreground">{voice.name}</h3>
+                            <span className="mt-1 inline-flex rounded-full border border-primary/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-primary">
+                              {voice.category}
+                            </span>
+                            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                              {voice.description}
+                            </p>
+                          </div>
+                          {selected && (
+                            <Check
+                              className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                              aria-label="Selected voice"
+                            />
+                          )}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void previewVoice(voice.id)}
+                            disabled={previewingVoiceId === voice.id}
+                            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border/70 px-3.5 text-sm text-foreground transition hover:border-primary/50 hover:bg-primary/5 disabled:opacity-50"
+                          >
+                            <Play className="h-3.5 w-3.5" aria-hidden="true" />
+                            {previewingVoiceId === voice.id ? "Playing preview…" : "Preview"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => voiceMutation.mutate(voice.id)}
+                            disabled={selected || voiceMutation.isPending}
+                            aria-pressed={selected}
+                            className="inline-flex min-h-10 items-center rounded-full bg-primary px-3.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-default disabled:opacity-60"
+                          >
+                            {selected ? "Selected" : "Use this voice"}
+                          </button>
+                          {voiceCatalog?.canManage && !voice.is_default && (
+                            <button
+                              type="button"
+                              onClick={() => removeVoiceMutation.mutate(voice.id)}
+                              disabled={removeVoiceMutation.isPending}
+                              className="inline-flex min-h-10 items-center rounded-full border border-destructive/40 px-3.5 text-sm text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+                {voiceCatalog?.canManage && (
+                  <div className="relative mt-5 border-t border-border/50 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddVoice((shown) => !shown)}
+                      className="inline-flex min-h-10 items-center rounded-full border border-primary/50 px-4 text-sm font-medium text-primary transition hover:bg-primary/10"
+                    >
+                      {showAddVoice ? "Close" : "Add New Voice"}
+                    </button>
+                    {showAddVoice && (
+                      <form
+                        className="mt-4 grid gap-3 rounded-xl border border-border/60 bg-background/30 p-4 sm:grid-cols-2"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          addVoiceMutation.mutate();
+                        }}
+                      >
+                        <label className="grid gap-1.5 text-sm text-foreground">
+                          Voice Name
+                          <input
+                            required
+                            maxLength={80}
+                            value={newVoice.name}
+                            onChange={(event) =>
+                              setNewVoice({ ...newVoice, name: event.target.value })
+                            }
+                            className="min-h-10 rounded-lg border border-border bg-background px-3"
+                          />
+                        </label>
+                        <label className="grid gap-1.5 text-sm text-foreground">
+                          Fish Audio Voice ID
+                          <input
+                            required
+                            pattern="[a-fA-F0-9]{32}"
+                            title="Enter the 32-character Fish Audio voice ID."
+                            value={newVoice.id}
+                            onChange={(event) =>
+                              setNewVoice({ ...newVoice, id: event.target.value.trim() })
+                            }
+                            className="min-h-10 rounded-lg border border-border bg-background px-3 font-mono"
+                          />
+                        </label>
+                        <label className="grid gap-1.5 text-sm text-foreground">
+                          Category
+                          <select
+                            value={newVoice.category}
+                            onChange={(event) =>
+                              setNewVoice({
+                                ...newVoice,
+                                category: event.target.value as FishVoiceCategory,
+                              })
+                            }
+                            className="min-h-10 rounded-lg border border-border bg-background px-3"
+                          >
+                            <option value="assistant">Assistant</option>
+                            <option value="feminine">Feminine</option>
+                            <option value="masculine">Masculine</option>
+                            <option value="character">Character</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </label>
+                        <label className="grid gap-1.5 text-sm text-foreground sm:col-span-2">
+                          Description
+                          <textarea
+                            maxLength={500}
+                            rows={3}
+                            value={newVoice.description}
+                            onChange={(event) =>
+                              setNewVoice({ ...newVoice, description: event.target.value })
+                            }
+                            className="rounded-lg border border-border bg-background px-3 py-2"
+                          />
+                        </label>
+                        <div className="sm:col-span-2">
+                          <button
+                            type="submit"
+                            disabled={addVoiceMutation.isPending}
+                            className="inline-flex min-h-10 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                          >
+                            {addVoiceMutation.isPending ? "Adding…" : "Add Voice"}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+                {voiceMutation.isPending && (
+                  <p className="relative mt-3 text-xs text-muted-foreground" role="status">
+                    Saving voice preference…
+                  </p>
+                )}
+              </div>
+            </motion.section>
 
             {/* Account — always expanded */}
             <motion.section variants={itemVariants}>

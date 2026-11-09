@@ -127,11 +127,13 @@ export function WakeWordProvider({
   mode = "balanced",
   autoSpeak = true,
   voiceRate = 1,
+  voiceId = null,
 }: {
   children: ReactNode;
   mode?: LordMode;
   autoSpeak?: boolean;
   voiceRate?: number;
+  voiceId?: string | null;
 }) {
   const queryClient = useQueryClient();
   const location = useLocation();
@@ -198,7 +200,7 @@ export function WakeWordProvider({
 
   const wirePipeline = useCallback(() => {
     if (pipelineRef.current) return pipelineRef.current;
-    const pipeline = new VoicePipeline(mode, voiceOutputEnabled, voiceRate);
+    const pipeline = new VoicePipeline(mode, voiceOutputEnabled, voiceRate, voiceId);
     pipeline.setPageContext(getVoicePageContext(location.pathname));
     pipeline.onControlCommand = (command) => controlHandlerRef.current(command);
     pipeline.onStatusChange = (pipelineStatus: VoicePipelineStatus) => {
@@ -231,7 +233,11 @@ export function WakeWordProvider({
     };
     pipelineRef.current = pipeline;
     return pipeline;
-  }, [location.pathname, mode, queryClient, updateState, voiceOutputEnabled, voiceRate]);
+  }, [location.pathname, mode, queryClient, updateState, voiceOutputEnabled, voiceRate, voiceId]);
+
+  useEffect(() => {
+    pipelineRef.current?.setVoiceId(voiceId);
+  }, [voiceId]);
 
   const enable = useCallback(async () => {
     enabledRef.current = false;

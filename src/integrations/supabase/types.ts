@@ -3761,6 +3761,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      fish_voice_catalog: {
+        Row: {
+          category: string;
+          created_at: string;
+          description: string;
+          id: string;
+          is_default: boolean;
+          name: string;
+        };
+        Insert: {
+          category: string;
+          created_at?: string;
+          description?: string;
+          id: string;
+          is_default?: boolean;
+          name: string;
+        };
+        Update: {
+          category?: string;
+          created_at?: string;
+          description?: string;
+          id?: string;
+          is_default?: boolean;
+          name?: string;
+        };
+        Relationships: [];
+      };
       user_settings: {
         Row: {
           ai_model: string | null;
@@ -3777,6 +3804,7 @@ export type Database = {
           updated_at: string;
           user_id: string;
           voice_rate: number;
+          voice_id: string | null;
         };
         Insert: {
           ai_model?: string | null;
@@ -3793,6 +3821,7 @@ export type Database = {
           updated_at?: string;
           user_id: string;
           voice_rate?: number;
+          voice_id?: string | null;
         };
         Update: {
           ai_model?: string | null;
@@ -3809,6 +3838,7 @@ export type Database = {
           updated_at?: string;
           user_id?: string;
           voice_rate?: number;
+          voice_id?: string | null;
         };
         Relationships: [];
       };
