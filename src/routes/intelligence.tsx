@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { motion, useReducedMotion, useScroll, useSpring } from "framer-motion";
 import type { ReactNode } from "react";
 import {
@@ -25,10 +25,17 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import "./intelligence.css";
 
 export const Route = createFileRoute("/intelligence")({
   ssr: false,
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) {
+      throw redirect({ to: "/dashboard", replace: true });
+    }
+  },
   head: () => ({
     meta: [
       { title: "LORD Intelligence — How LORD Understands, Remembers & Assists" },

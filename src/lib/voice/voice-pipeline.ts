@@ -3,6 +3,7 @@ import { getApiBaseUrl } from "@/lib/api-config";
 import { supabase } from "@/integrations/supabase/client";
 import { streamTextLines } from "@/lib/stream-text-lines";
 import type { LordMode } from "@/lib/modes";
+import { normalizeSpeechText } from "./speech-text";
 import {
   getSpeechRecognitionConstructor,
   type SpeechRecognitionLike,
@@ -717,6 +718,8 @@ export class VoicePipeline {
 
   private async speak(text: string): Promise<boolean> {
     if (typeof window === "undefined" || !text) return false;
+    const speechText = normalizeSpeechText(text);
+    if (!speechText) return false;
     const playbackGeneration = this.speechGeneration;
     const controller = new AbortController();
     this.ttsAbortController = controller;
@@ -724,7 +727,7 @@ export class VoicePipeline {
       const response = await authenticatedFetch(`${getApiBaseUrl()}/api/voice/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, speed: this.voiceRate, voiceId: this.voiceId }),
+        body: JSON.stringify({ text: speechText, speed: this.voiceRate, voiceId: this.voiceId }),
         signal: controller.signal,
       });
       if (playbackGeneration !== this.speechGeneration) return false;
@@ -775,7 +778,7 @@ export class VoicePipeline {
       window.speechSynthesis.cancel();
       this.speechStoppedByUser = false;
       this.speaking = true;
-      const chunks = splitSpeechText(text);
+      const chunks = splitSpeechText(speechText);
       let index = 0;
       const speakNext = () => {
         const part = chunks[index++]?.trim();

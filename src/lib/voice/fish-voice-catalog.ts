@@ -11,17 +11,24 @@ export interface FishVoice {
 
 export const FISH_VOICES = [
   {
-    id: "3b236efc60e64de29578815a59070170",
-    name: "LORD",
-    description: "The original LORD voice. Kept as the default for existing users.",
+    id: "da33a7e30cb847c0a4be8278dc107e7e",
+    name: "Lord Default Voice",
+    description: "The default LORD voice for new users and sessions.",
     category: "assistant",
     is_default: true,
   },
   {
-    id: "933563129e564b19a115bedd57b7406a",
-    name: "Sarah",
-    description: "A clear, warm voice from Fish Audio’s official S2.1 Pro example.",
-    category: "feminine",
+    id: "9de091e13a954983acda089d1c3e83ec",
+    name: "Lord-Tutor",
+    description: "Optimized for tutoring and educational content.",
+    category: "assistant",
+    is_default: false,
+  },
+  {
+    id: "b5b2d75e20714cea8a93411b36bda311",
+    name: "Potato",
+    description: "An optional assistant voice for variety.",
+    category: "assistant",
     is_default: false,
   },
 ] as const;

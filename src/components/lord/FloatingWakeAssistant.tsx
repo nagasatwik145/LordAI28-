@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowUpRight, Mic, MicOff, Pause, Radio, VolumeX, X } from "lucide-react";
+import { ArrowUpRight, CircleHelp, Mic, MicOff, Pause, Radio, VolumeX, X } from "lucide-react";
 import { useWakeWord } from "./WakeWordProvider";
 
 function stateLabel(state: ReturnType<typeof useWakeWord>["state"]) {
@@ -43,6 +43,40 @@ export function FloatingWakeAssistant() {
     select: (state) => state.matches.some((match) => match.routeId === "/_authenticated"),
   });
   const [expanded, setExpanded] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const tooltipText =
+    "Microphone access lets your browser speech service hear your voice while active.";
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && showTooltip) {
+        setShowTooltip(false);
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showTooltip]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (showTooltip && tooltipRef.current && triggerRef.current) {
+        const target = event.target as Node;
+        if (!tooltipRef.current.contains(target) && !triggerRef.current.contains(target)) {
+          setShowTooltip(false);
+        }
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showTooltip]);
 
   if (!inAuthenticatedWorkspace || location.pathname === "/voice") return null;
 
@@ -57,18 +91,54 @@ export function FloatingWakeAssistant() {
     >
       {!active && !expanded && state !== "paused" && state !== "error" ? (
         <div className="ml-auto flex w-fit flex-col items-end gap-1 rounded-[22px] border border-cyan-200/20 bg-[#080d18]/95 p-2.5 text-white shadow-[0_12px_38px_rgba(0,0,0,.5),0_0_22px_rgba(39,190,255,.14)] backdrop-blur-xl">
-          <p className="max-w-56 px-1 text-right text-[10px] leading-relaxed text-white/55">
-            Microphone access lets your browser speech service hear your voice while active.
-          </p>
-          <button
-            type="button"
-            disabled={!supported || state === "requesting_permission"}
-            onClick={() => void startVoiceConversation()}
-            className="flex min-h-10 items-center gap-2 rounded-full bg-cyan-200 px-3.5 text-xs font-semibold text-slate-950 shadow-sm transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            aria-label="Start voice conversation; browser will request microphone access"
-          >
-            <Mic className="h-4 w-4" /> Start voice
-          </button>
+          <div className="relative flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={!supported || state === "requesting_permission"}
+              onClick={() => void startVoiceConversation()}
+              className="flex min-h-10 items-center gap-2 rounded-full bg-cyan-200 px-3.5 text-xs font-semibold text-slate-950 shadow-sm transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Start voice conversation; browser will request microphone access"
+            >
+              <Mic className="h-4 w-4" /> Start voice
+            </button>
+            <button
+              ref={triggerRef}
+              type="button"
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTooltip((prev) => !prev);
+              }}
+              onFocus={() => setShowTooltip(true)}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setShowTooltip(false);
+                }
+              }}
+              aria-label="Show microphone permission information"
+              aria-expanded={showTooltip}
+              aria-describedby={showTooltip ? "mic-tooltip" : undefined}
+              className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full text-white/55 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+            >
+              <CircleHelp className="h-4 w-4" aria-hidden="true" />
+            </button>
+            {showTooltip && (
+              <div
+                ref={tooltipRef}
+                id="mic-tooltip"
+                role="tooltip"
+                className="absolute right-full mr-2 z-10 max-w-[18rem] rounded-xl border border-cyan-200/20 bg-[#080d18]/95 px-3 py-2 text-[10px] leading-relaxed text-white/80 shadow-[0_12px_38px_rgba(0,0,0,.5),0_0_22px_rgba(39,190,255,.14)] backdrop-blur-xl animate-in fade-in-150 zoom-in-95 duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-100 data-[state=closed]:zoom-out-95 data-[state=closed]:duration-100"
+                style={{ marginBottom: "calc(100% + 0.5rem)" }}
+              >
+                {tooltipText}
+                <div
+                  className="absolute right-[-6px] top-1/2 -translate-y-1/2 translate-x-full w-0 h-0 border-3 border-transparent border-l-cyan-200/20"
+                  aria-hidden="true"
+                />
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <section className="overflow-hidden rounded-[24px] border border-cyan-200/20 bg-[#080d18]/95 text-white shadow-[0_16px_55px_rgba(0,0,0,.58),0_0_28px_rgba(39,190,255,.14)] backdrop-blur-2xl">

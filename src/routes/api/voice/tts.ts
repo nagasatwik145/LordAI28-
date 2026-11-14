@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseRequestAuth } from "@/integrations/supabase/auth-middleware";
 import { apiErrorResponse } from "@/lib/api-error";
 import { isFishVoiceIdFormat } from "@/lib/voice/fish-voice-catalog";
+import { normalizeSpeechText } from "@/lib/voice/speech-text";
 
 const TtsRequestSchema = z.object({
   text: z.string().trim().min(1).max(12_000),
@@ -26,6 +27,16 @@ export const Route = createFileRoute("/api/voice/tts")({
               400,
               "INVALID_REQUEST",
               "Speech text is required before playback can start.",
+              requestId,
+            );
+          }
+
+          const speechText = normalizeSpeechText(parsed.data.text);
+          if (!speechText) {
+            return apiErrorResponse(
+              400,
+              "INVALID_REQUEST",
+              "Speech text must contain words or meaningful symbols.",
               requestId,
             );
           }
@@ -69,7 +80,7 @@ export const Route = createFileRoute("/api/voice/tts")({
               model,
             },
             body: JSON.stringify({
-              text: parsed.data.text,
+              text: speechText,
               format: "mp3",
               prosody: { speed: parsed.data.speed ?? 1 },
               ...(voiceId ? { reference_id: voiceId } : {}),

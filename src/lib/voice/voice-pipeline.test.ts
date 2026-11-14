@@ -91,11 +91,11 @@ describe("VoicePipeline", () => {
       },
     );
     mocks.authenticatedFetch.mockResolvedValue(new Response(new Blob(["audio"]), { status: 200 }));
-    const voiceId = "933563129e564b19a115bedd57b7406a";
+    const voiceId = "9de091e13a954983acda089d1c3e83ec";
     const pipeline = new VoicePipeline("balanced", true, 1.15, voiceId);
 
     await (pipeline as unknown as { speak: (text: string) => Promise<boolean> }).speak(
-      "Voice selection test",
+      "Voice **selection** test! A + B = 50%.",
     );
 
     expect(mocks.authenticatedFetch).toHaveBeenCalledWith(
@@ -103,10 +103,50 @@ describe("VoicePipeline", () => {
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(mocks.authenticatedFetch.mock.calls[0][1].body)).toEqual({
-      text: "Voice selection test",
+      text: "Voice selection test. A plus B equals 50 percent.",
       speed: 1.15,
       voiceId,
     });
+  });
+
+  it("uses the same clean speech text for browser fallback and leaves message text unchanged", async () => {
+    const speechSynthesis = {
+      cancel: vi.fn(),
+      speak: vi.fn((utterance: MockUtterance) => queueMicrotask(() => utterance.onend?.())),
+    };
+    class MockUtterance {
+      rate = 1;
+      onstart: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(readonly text: string) {}
+    }
+    vi.stubGlobal("window", { speechSynthesis });
+    vi.stubGlobal("SpeechSynthesisUtterance", MockUtterance);
+    const rawAnswer = "Hello! **A + B** = 50%.";
+    mocks.authenticatedFetch
+      .mockImplementationOnce(
+        async () =>
+          new Response(`data: ${JSON.stringify({ type: "text-delta", delta: rawAnswer })}\n\n`, {
+            headers: { "Content-Type": "text/event-stream" },
+          }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
+    const pipeline = new VoicePipeline("balanced", true);
+    const onMessagesChange = vi.fn();
+    pipeline.onMessagesChange = onMessagesChange;
+    await pipeline.submitText("Please read this naturally");
+
+    const requestText = JSON.parse(mocks.authenticatedFetch.mock.calls[1][1].body).text;
+    expect(requestText).toBe("Hello. A plus B equals 50 percent.");
+    expect(onMessagesChange.mock.calls.at(-1)?.[0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: "assistant", text: rawAnswer })]),
+    );
+    await vi.waitFor(() => expect(speechSynthesis.speak).toHaveBeenCalledTimes(2));
+    expect(speechSynthesis.speak.mock.calls.map(([utterance]) => utterance.text).join(" ")).toBe(
+      requestText,
+    );
+    expect(rawAnswer).toBe("Hello! **A + B** = 50%.");
   });
 
   it("handles exact voice controls locally, adds coarse page context, and leaves ordinary text alone", async () => {

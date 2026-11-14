@@ -37,6 +37,11 @@ import type { TutorSessionRow, LearningSession } from "@/lib/learning/types";
 import { TutorSidebar } from "../TutorSidebar";
 import { getStudyLanguagePreference, studyLanguageInstruction } from "@/lib/learning/preferences";
 import { RichMessage } from "@/components/lord/RichMessage";
+import { normalizeSpeechText } from "@/lib/voice/speech-text";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
+import { getUserSettings } from "@/lib/user-settings.functions";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 
 interface TutorViewProps {
   snapshot: LearningSnapshot | undefined;
@@ -122,6 +127,12 @@ const EMPTY_SESSIONS: ReturnType<typeof listTutorSessions> extends Promise<infer
 
 export function TutorView({ snapshot, userId, conceptId, initialPrompt, onBack }: TutorViewProps) {
   const { user } = useCurrentUser();
+  const fetchSettings = useServerFn(getUserSettings);
+  const { data: userSettings } = useQuery({
+    queryKey: ["user_settings", userId],
+    queryFn: () => fetchSettings(),
+    enabled: Boolean(userId),
+  });
   const [messages, setMessages] = useState<TutorMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -140,6 +151,10 @@ export function TutorView({ snapshot, userId, conceptId, initialPrompt, onBack }
   const titleGeneratedForRef = useRef<string | null>(null);
   const masteryUpdateQueueRef = useRef<MasterySignal[]>([]);
   const initialPromptAppliedRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+
+  const voiceId = userSettings?.voice_id ?? null;
 
   useEffect(() => {
     if (initialPromptAppliedRef.current || !initialPrompt?.trim()) return;
@@ -605,28 +620,90 @@ export function TutorView({ snapshot, userId, conceptId, initialPrompt, onBack }
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleSpeak = (text: string, id: string) => {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
+  const handleSpeak = async (text: string, id: string) => {
     if (speakingId === id) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+        audioRef.current = null;
+        audioUrlRef.current = null;
+      }
       setSpeakingId(null);
       return;
     }
-    const utterance = new SpeechSynthesisUtterance(
-      text.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[#*_`]/g, ""),
-    );
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+      audioRef.current = null;
+      audioUrlRef.current = null;
+    }
+
+    const speechText = normalizeSpeechText(text);
+    if (!speechText) return;
+
+    setSpeakingId(id);
+
+    try {
+      const response = await authenticatedFetch("/api/voice/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: speechText, voiceId }),
+      });
+
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        audioUrlRef.current = audioUrl;
+        audio.onended = () => {
+          if (audioRef.current !== audio) return;
+          audioRef.current = null;
+          if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+          audioUrlRef.current = null;
+          setSpeakingId(null);
+        };
+        audio.onerror = () => {
+          if (audioRef.current !== audio) return;
+          audioRef.current = null;
+          if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+          audioUrlRef.current = null;
+          setSpeakingId(null);
+        };
+        await audio.play();
+        return;
+      }
+    } catch {
+      // Fall through to speechSynthesis fallback
+    }
+
+    if (!("speechSynthesis" in window)) {
+      setSpeakingId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(speechText);
     const language = getStudyLanguagePreference();
     utterance.lang = (
       { English: "en", Spanish: "es", French: "fr", Hindi: "hi", Arabic: "ar" } as const
     )[language ?? "English"];
     utterance.onend = () => setSpeakingId(null);
     utterance.onerror = () => setSpeakingId(null);
-    setSpeakingId(id);
     window.speechSynthesis.speak(utterance);
   };
 
   useEffect(
     () => () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+        audioRef.current = null;
+        audioUrlRef.current = null;
+      }
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
